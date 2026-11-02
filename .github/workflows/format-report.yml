@@ -1,0 +1,63 @@
+name: Format Report
+
+on:
+  push:
+    branches:
+      - arena/c60dd2c2-installerx-revived
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  report:
+    name: Report spotless diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: "zulu"
+          java-version: "25"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
+          build-scan-terms-of-use-agree: "yes"
+          build-scan-publish: false
+          cache-read-only: true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Run spotlessApply and capture the diff
+        run: |
+          ./gradlew spotlessApply --no-configuration-cache || true
+          git diff > /tmp/spotless.diff
+          echo "spotless diff bytes: $(wc -c < /tmp/spotless.diff)"
+
+      - name: Post the diff as a pull request comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -s /tmp/spotless.diff ]; then
+            {
+              echo "Temporary formatting report. spotlessApply would change:"
+              echo ''
+              echo '```diff'
+              head -c 55000 /tmp/spotless.diff
+              echo ''
+              echo '```'
+            } > /tmp/comment.md
+          else
+            echo "spotlessApply produced no changes." > /tmp/comment.md
+          fi
+          gh pr comment 3 --repo "${{ github.repository }}" --body-file /tmp/comment.md
