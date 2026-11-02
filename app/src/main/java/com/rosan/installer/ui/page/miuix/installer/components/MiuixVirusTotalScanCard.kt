@@ -317,7 +317,7 @@ private fun MiuixVirusTotalReportView(
             val remaining = report.detections.size - MAX_LISTED_DETECTIONS
             if (remaining > 0) {
                 Text(
-                    text = stringResource(R.string.virustotal_more_engines, remaining),
+                    text = stringResource(R.string.virustotal_more_detections, remaining),
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )

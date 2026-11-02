@@ -1068,6 +1068,7 @@
     <string name="virustotal_detections">%1$d detections out of %2$d engines</string>
     <string name="virustotal_no_detections">0 detections out of %1$d engines</string>
     <string name="virustotal_more_engines"> and %1$d more</string>
+    <string name="virustotal_more_detections">%1$d more</string>
     <string name="virustotal_scan_method">Method: %1$s</string>
     <string name="virustotal_scan_method_hash">SHA-256 hash lookup</string>
     <string name="virustotal_scan_method_upload">Uploaded and scanned</string>

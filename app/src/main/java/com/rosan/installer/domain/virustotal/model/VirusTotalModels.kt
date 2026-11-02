@@ -27,11 +27,6 @@ enum class VirusTotalVerdict {
     SUSPICIOUS,
     MALICIOUS,
     NOT_FOUND,
-    ;
-
-    /** True when at least one engine flagged the file. */
-    val hasDetections: Boolean
-        get() = this == LIKELY_FALSE_POSITIVE || this == SUSPICIOUS || this == MALICIOUS
 }
 
 /**
