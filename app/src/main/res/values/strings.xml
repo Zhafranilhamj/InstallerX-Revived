@@ -1035,9 +1035,9 @@
     <string name="virustotal_api_key_ready">Ready to scan</string>
     <string name="virustotal_api_key_invalid_format">Invalid API key format. VirusTotal API keys are 64 hexadecimal characters.</string>
     <string name="virustotal_api_key_invalid">VirusTotal rejected this API key. Check that it is active and has no restrictions.</string>
-    <string name="virustotal_api_key_network_error">Couldn't validate the API key. Check your connection and try again.</string>
+    <string name="virustotal_api_key_network_error">Couldn\'t validate the API key. Check your connection and try again.</string>
     <string name="virustotal_api_key_quota_exceeded">The VirusTotal API quota has been exceeded. Try again later.</string>
-    <string name="virustotal_api_key_unknown_error">Couldn't validate the API key. Try again.</string>
+    <string name="virustotal_api_key_unknown_error">Couldn\'t validate the API key. Try again.</string>
     <string name="virustotal_api_key_stored_locally">The key is stored locally on this device and is only sent to VirusTotal.</string>
     <string name="virustotal_check_key">Check key</string>
     <string name="virustotal_show_key">Show API key</string>
@@ -1060,7 +1060,7 @@
     <string name="virustotal_strict_scan_required">Strict mode requires a scan before installation.</string>
     <string name="virustotal_strict_scan_complete">Scan complete. You can install now.</string>
     <string name="virustotal_strict_scan_in_progress">Wait for the VirusTotal scan to finish before installing.</string>
-    <string name="virustotal_scan_install_with_caution">Couldn't scan this file. Install with caution.</string>
+    <string name="virustotal_scan_install_with_caution">Couldn\'t scan this file. Install with caution.</string>
     <string name="virustotal_result_clean">No threats detected</string>
     <string name="virustotal_result_suspicious">Suspicious detections</string>
     <string name="virustotal_result_malicious">Threats detected</string>
@@ -1076,9 +1076,9 @@
     <string name="virustotal_scan_malicious_warning">Threats were detected. Install only if you trust this file.</string>
     <string name="virustotal_scan_suspicious_warning">Some engines flagged this file. Review the report before installing.</string>
     <string name="virustotal_scan_file_too_large">This file is too large to upload. The maximum size is 32 MB.</string>
-    <string name="virustotal_scan_file_unreadable">Couldn't read the file for scanning.</string>
+    <string name="virustotal_scan_file_unreadable">Couldn\'t read the file for scanning.</string>
     <string name="virustotal_scan_invalid_key">The VirusTotal API key is invalid.</string>
-    <string name="virustotal_scan_network_error">Couldn't reach VirusTotal. Check your connection and try again.</string>
+    <string name="virustotal_scan_network_error">Couldn\'t reach VirusTotal. Check your connection and try again.</string>
     <string name="virustotal_scan_not_found">VirusTotal has no report for this file yet. You can upload it for scanning.</string>
     <string name="virustotal_scan_quota_exceeded">The VirusTotal API quota has been exceeded. Try again later.</string>
     <string name="virustotal_scan_timeout">The scan took too long to complete.</string>
