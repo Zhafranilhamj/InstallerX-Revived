@@ -119,7 +119,7 @@ fun MiuixInstallerPage(
     val globalColorScheme = InstallerTheme.colorScheme
 
     val activeSeedColor = temporarySeedColor ?: globalSeedColor
-    val activeMd3ColorScheme = remember(activeSeedColor, globalColorScheme, isDark, paletteStyle) {
+    val activeMd3ColorScheme = remember(activeSeedColor, globalColorScheme, isDark, paletteStyle, colorSpec) {
         temporarySeedColor?.let {
             dynamicColorScheme(keyColor = it, isDark = isDark, style = paletteStyle, colorSpec = colorSpec)
         } ?: globalColorScheme

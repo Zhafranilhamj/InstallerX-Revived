@@ -1048,6 +1048,7 @@
     <string name="virustotal_detections">%2$d 个引擎中有 %1$d 个检出</string>
     <string name="virustotal_no_detections">%1$d 个引擎中 0 个检出</string>
     <string name="virustotal_more_engines">，另有 %1$d 个</string>
+    <string name="virustotal_more_detections">另有 %1$d 个</string>
     <string name="virustotal_scan_method">方式：%1$s</string>
     <string name="virustotal_scan_method_hash">SHA-256 哈希查询</string>
     <string name="virustotal_scan_method_upload">已上传并扫描</string>
@@ -1063,4 +1064,12 @@
     <string name="virustotal_scan_quota_exceeded">VirusTotal API 配额已用尽，请稍后再试。</string>
     <string name="virustotal_scan_timeout">扫描耗时过长，未能完成。</string>
     <string name="virustotal_scan_unknown_error">VirusTotal 扫描失败，请重试。</string>
+    <string name="virustotal_scan_mode_requires_valid_key">请先添加并验证 VirusTotal API 密钥，才能启用“普通”和“严格”模式。</string>
+    <string name="virustotal_result_false_positive">可能是误报</string>
+    <string name="virustotal_detections_title">检出名称</string>
+    <string name="virustotal_detection_engine_result">%1$s：%2$s</string>
+    <string name="virustotal_false_positive_warning">仅有少数引擎标记了此文件，这在重新打包或修改过的 APK 中很常见，通常属于误报，但安装来源不明的文件时仍需谨慎。</string>
+    <string name="virustotal_false_positive_strict_note">由于这些检出看起来属于常见的误报，严格模式仍允许安装。</string>
+    <string name="virustotal_strict_scan_blocked">VirusTotal 判定此文件为恶意软件，严格模式已阻止安装。</string>
+    <string name="virustotal_strict_malicious_blocked">已阻止安装：VirusTotal 在此文件中检测到恶意软件。</string>
 </resources>

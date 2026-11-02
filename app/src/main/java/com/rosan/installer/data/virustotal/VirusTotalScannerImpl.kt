@@ -6,12 +6,16 @@ import com.rosan.installer.domain.engine.model.source.DataEntity
 import com.rosan.installer.domain.virustotal.VirusTotalScanner
 import com.rosan.installer.domain.virustotal.calculateSha256
 import com.rosan.installer.domain.virustotal.model.VirusTotalApiKeyFormat
+import com.rosan.installer.domain.virustotal.model.VirusTotalDetection
 import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
 import com.rosan.installer.domain.virustotal.model.VirusTotalException
+import com.rosan.installer.domain.virustotal.model.VirusTotalFalsePositiveHeuristics
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.domain.virustotal.model.VirusTotalVerdict
+import com.rosan.installer.domain.virustotal.toHexString
 import java.io.IOException
+import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -175,9 +179,11 @@ class VirusTotalScannerImpl(
             )
         }
 
-        // Compute the hash up front so the report has a stable permalink even if the analysis
-        // response does not include it.
-        val sha256 = data.calculateSha256()
+        // Hash the file while it is streamed to VirusTotal instead of reading it twice. This keeps
+        // the dialog responsive on large APKs, where hashing and uploading used to read the whole
+        // file from storage twice before the analysis could even start.
+        val digest = MessageDigest.getInstance("SHA-256")
+        var uploadSha256: String? = null
 
         val uploadBody = object : RequestBody() {
             override fun contentType(): MediaType = OCTET_STREAM
@@ -187,14 +193,17 @@ class VirusTotalScannerImpl(
             override fun writeTo(sink: BufferedSink) {
                 val input = data.getInputStream()
                     ?: throw IOException("The selected file could not be opened for upload.")
+                digest.reset()
                 input.use { stream ->
                     val buffer = ByteArray(UPLOAD_BUFFER_SIZE)
                     while (true) {
                         val bytesRead = stream.read(buffer)
                         if (bytesRead < 0) break
+                        digest.update(buffer, 0, bytesRead)
                         sink.write(buffer, 0, bytesRead)
                     }
                 }
+                uploadSha256 = digest.digest().toHexString()
             }
         }
 
@@ -252,6 +261,10 @@ class VirusTotalScannerImpl(
                 message = "Could not reach VirusTotal.",
             )
         }
+
+        // The digest is produced while the body is streamed. Fall back to a separate pass when the
+        // body was never written, so the report still carries a stable permalink.
+        val analysisSha256 = uploadSha256 ?: data.calculateSha256()
 
         val deadline = System.currentTimeMillis() + MAX_ANALYSIS_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
@@ -313,7 +326,7 @@ class VirusTotalScannerImpl(
                     return@withContext parseReport(
                         stats = stats,
                         results = attributes?.results,
-                        sha256 = sha256,
+                        sha256 = analysisSha256,
                         fileName = fileName,
                         fileSize = if (size >= 0) size else null,
                         method = VirusTotalScanMethod.UPLOAD,
@@ -362,20 +375,32 @@ class VirusTotalScannerImpl(
             stats.undetected +
             stats.harmless +
             stats.timeout
-        val verdict = when {
-            stats.malicious > 0 -> VirusTotalVerdict.MALICIOUS
-            stats.suspicious > 0 -> VirusTotalVerdict.SUSPICIOUS
-            else -> VirusTotalVerdict.CLEAN
-        }
         val detections = results
-            ?.values
-            ?.filter { result ->
-                result.category == "malicious" || result.category == "suspicious"
-            }
-            ?.mapNotNull { result -> result.engine_name?.takeIf { it.isNotBlank() } }
-            ?.distinct()
-            ?.sorted()
             .orEmpty()
+            .mapNotNull { (engineKey, result) ->
+                if (result.category != "malicious" && result.category != "suspicious") {
+                    return@mapNotNull null
+                }
+                val engine = result.engine_name?.takeIf { it.isNotBlank() } ?: engineKey
+                VirusTotalDetection(
+                    engine = engine,
+                    name = result.result?.trim()?.takeIf { it.isNotEmpty() },
+                )
+            }
+            .distinctBy { detection -> detection.engine.lowercase() }
+            .sortedBy { detection -> detection.engine.lowercase() }
+
+        val likelyFalsePositive = VirusTotalFalsePositiveHeuristics.isLikelyFalsePositive(
+            positives = positives,
+            total = total,
+            detections = detections,
+        )
+        val verdict = when {
+            positives <= 0 -> VirusTotalVerdict.CLEAN
+            likelyFalsePositive -> VirusTotalVerdict.LIKELY_FALSE_POSITIVE
+            stats.malicious > 0 -> VirusTotalVerdict.MALICIOUS
+            else -> VirusTotalVerdict.SUSPICIOUS
+        }
 
         return VirusTotalReport(
             verdict = verdict,

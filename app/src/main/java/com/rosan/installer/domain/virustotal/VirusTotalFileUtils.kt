@@ -44,7 +44,7 @@ fun DataEntity.displayName(): String {
     }.ifBlank { "upload.bin" }
 }
 
-private fun ByteArray.toHexString(): String {
+internal fun ByteArray.toHexString(): String {
     val builder = StringBuilder(size * 2)
     for (byte in this) {
         val value = byte.toInt() and 0xFF

@@ -43,7 +43,9 @@ fun DialogPage(session: InstallerSessionRepository, viewModel: InstallerViewMode
     val paletteStyle = InstallerTheme.paletteStyle
     val colorSpec = InstallerTheme.colorSpec
 
-    val activeColorScheme = remember(temporarySeedColor, globalColorScheme, isDark, paletteStyle) {
+    // The palette is cached, so switching the dialog theme to the package icon colour no longer
+    // costs a full palette generation on the frame that opens the dialog.
+    val activeColorScheme = remember(temporarySeedColor, globalColorScheme, isDark, paletteStyle, colorSpec) {
         temporarySeedColor?.let {
             dynamicColorScheme(
                 keyColor = it,

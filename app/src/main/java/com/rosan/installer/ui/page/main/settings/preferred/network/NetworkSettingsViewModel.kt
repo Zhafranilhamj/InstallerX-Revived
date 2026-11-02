@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -50,6 +51,17 @@ class NetworkSettingsViewModel(
         started = SharingStarted.Eagerly,
         initialValue = NetworkSettingsState(),
     )
+
+    init {
+        // Re-validate a stored key when the page opens so Normal and Strict mode stay unlocked
+        // without making the user press "Check key" again after every visit.
+        viewModelScope.launch {
+            val storedKey = appSettingsRepo.preferencesFlow.first().virusTotalApiKey
+            if (storedKey.isNotBlank()) {
+                validateKey(storedKey, debounce = false)
+            }
+        }
+    }
 
     fun dispatch(action: NetworkSettingsAction) {
         when (action) {

@@ -42,14 +42,56 @@ fun dynamicColorScheme(
         ThemeColorSpec.SPEC_2021 -> ColorSpec.SpecVersion.SPEC_2021
     }
 
-    // Generate and return the color scheme using materialkolor
-    return dynamicColorScheme(
+    // Generating a palette is expensive and the install dialog regenerates the scheme for every
+    // package icon colour. Reuse the result for repeated dialogs instead of blocking the frame.
+    val cacheKey = DynamicColorSchemeCacheKey(keyColor, isDark, style, contrastLevel, colorSpec)
+    DynamicColorSchemeCache[cacheKey]?.let { return it }
+
+    val scheme = dynamicColorScheme(
         seedColor = keyColor,
         isDark = isDark,
         style = mkStyle,
         contrastLevel = contrastLevel,
         specVersion = specVersion,
     )
+    DynamicColorSchemeCache[cacheKey] = scheme
+    return scheme
+}
+
+private data class DynamicColorSchemeCacheKey(
+    val keyColor: Color,
+    val isDark: Boolean,
+    val style: PaletteStyle,
+    val contrastLevel: Double,
+    val colorSpec: ThemeColorSpec,
+)
+
+/**
+ * Small LRU of previously generated palettes.
+ *
+ * Palette generation walks several HCT tonal palettes and is far too slow to repeat on the main
+ * thread every time the install dialog opens for the same app icon colour.
+ */
+private object DynamicColorSchemeCache {
+    private const val MAX_ENTRIES = 8
+
+    private val entries = object : LinkedHashMap<DynamicColorSchemeCacheKey, ColorScheme>(
+        MAX_ENTRIES,
+        0.75f,
+        true,
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<DynamicColorSchemeCacheKey, ColorScheme>?,
+        ): Boolean = size > MAX_ENTRIES
+    }
+
+    @Synchronized
+    operator fun get(key: DynamicColorSchemeCacheKey): ColorScheme? = entries[key]
+
+    @Synchronized
+    operator fun set(key: DynamicColorSchemeCacheKey, value: ColorScheme) {
+        entries[key] = value
+    }
 }
 
 /**

@@ -1068,6 +1068,7 @@
     <string name="virustotal_detections">%1$d detections out of %2$d engines</string>
     <string name="virustotal_no_detections">0 detections out of %1$d engines</string>
     <string name="virustotal_more_engines"> and %1$d more</string>
+    <string name="virustotal_more_detections">%1$d more</string>
     <string name="virustotal_scan_method">Method: %1$s</string>
     <string name="virustotal_scan_method_hash">SHA-256 hash lookup</string>
     <string name="virustotal_scan_method_upload">Uploaded and scanned</string>
@@ -1083,4 +1084,12 @@
     <string name="virustotal_scan_quota_exceeded">The VirusTotal API quota has been exceeded. Try again later.</string>
     <string name="virustotal_scan_timeout">The scan took too long to complete.</string>
     <string name="virustotal_scan_unknown_error">The VirusTotal scan failed. Try again.</string>
+    <string name="virustotal_scan_mode_requires_valid_key">Add and validate a VirusTotal API key to enable Normal and Strict modes.</string>
+    <string name="virustotal_result_false_positive">Likely false positive</string>
+    <string name="virustotal_detections_title">Detected as</string>
+    <string name="virustotal_detection_engine_result">%1$s: %2$s</string>
+    <string name="virustotal_false_positive_warning">Only a few engines flagged this file, which is common for repackaged or modified APKs. These detections are frequently false positives, but stay cautious when installing a file from an untrusted source.</string>
+    <string name="virustotal_false_positive_strict_note">Strict mode allows installation because these detections look like common false positives.</string>
+    <string name="virustotal_strict_scan_blocked">Strict mode blocks installation because VirusTotal detected this file as malware.</string>
+    <string name="virustotal_strict_malicious_blocked">Installation blocked: VirusTotal detected malware in this file.</string>
 </resources>

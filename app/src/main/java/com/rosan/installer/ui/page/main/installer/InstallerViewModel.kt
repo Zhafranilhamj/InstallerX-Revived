@@ -37,7 +37,6 @@ import com.rosan.installer.domain.settings.model.config.InstallMode
 import com.rosan.installer.domain.settings.model.config.InstallerMode
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
-import com.rosan.installer.domain.settings.repository.BooleanSetting
 import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
@@ -161,16 +160,20 @@ class InstallerViewModel(
     }
 
     /**
-     * Loads specific settings that might not be exposed directly in preferencesFlow,
-     * but are needed locally by the installer.
+     * Loads the installer-specific settings from the aggregated preferences snapshot.
+     *
+     * A single read is used instead of one collected flow per setting because the collected repo
+     * flow waits for this job before it can move the UI past the previous stage, so every extra
+     * DataStore round trip delayed the install dialog from appearing.
      */
     private fun loadInitialSettings() = viewModelScope.launch {
+        val prefs = appSettingsRepo.preferencesFlow.first()
         _localState.update { state ->
             state.copy(
                 viewSettings = state.viewSettings.copy(
-                    preferSystemIconForUpdates = appSettingsRepo.getBoolean(BooleanSetting.PreferSystemIconForInstall, false).first(),
-                    enableModuleInstall = appSettingsRepo.getBoolean(BooleanSetting.LabEnableModuleFlash, false).first(),
-                    useDynColorFollowPkgIcon = appSettingsRepo.getBoolean(BooleanSetting.UiDynColorFollowPkgIcon, false).first(),
+                    preferSystemIconForUpdates = prefs.preferSystemIcon,
+                    enableModuleInstall = prefs.labRootEnableModuleFlash,
+                    useDynColorFollowPkgIcon = prefs.useDynColorFollowPkgIcon,
                 ),
             )
         }
@@ -621,6 +624,10 @@ class InstallerViewModel(
                     }
                 }
 
+                if (newStage is InstallerStage.InstallPrepare) {
+                    ensureStrictScan()
+                }
+
                 autoInstallJob?.cancel()
                 if (newStage is InstallerStage.InstallPrepare && session.config.installMode == InstallMode.AutoDialog) {
                     autoInstallJob = viewModelScope.launch {
@@ -842,16 +849,33 @@ class InstallerViewModel(
                 }
             }
 
-            if (uiState.value.virusTotalScan.mode == VirusTotalScanMode.STRICT) {
-                startScanForPackage(
-                    packageName = targetPackageName,
-                    method = VirusTotalScanMethod.UPLOAD,
-                    mandatory = true,
-                )
-            }
+            ensureStrictScan()
         } else {
             _localState.update { it.copy(stage = InstallerStage.InstallChoice) }
         }
+    }
+
+    /**
+     * Strict mode requires an upload scan for the package shown in the prepare dialog.
+     *
+     * The scan is started as soon as the prepare stage is reached, including the single-package
+     * path that maps straight to the stage without going through [installPrepare], so the scan
+     * gate can never be skipped by the install button.
+     */
+    private fun ensureStrictScan() {
+        val packageName = _localState.value.currentPackageName ?: return
+        if (uiState.value.virusTotalScan.mode != VirusTotalScanMode.STRICT) return
+
+        val local = _localState.value.virusTotalScan
+        val alreadyHandled = local.packageName == packageName &&
+            local.status != VirusTotalScanStatus.IDLE
+        if (alreadyHandled) return
+
+        startScanForPackage(
+            packageName = packageName,
+            method = VirusTotalScanMethod.UPLOAD,
+            mandatory = true,
+        )
     }
 
     private fun installExtendedMenu() {
@@ -987,10 +1011,21 @@ class InstallerViewModel(
     }
 
     private fun install() {
-        val scanState = _localState.value.virusTotalScan
+        // The mode lives in preferences while the local scan state carries the live status and
+        // report for the current package, so take the mode from the combined UI state.
+        val scanState = _localState.value.virusTotalScan.copy(
+            mode = uiState.value.virusTotalScan.mode,
+        )
         if (scanState.mode == VirusTotalScanMode.STRICT) {
             if (scanState.status == VirusTotalScanStatus.SCANNING) {
+                // Remember an automatic dialog install so it runs as soon as the scan finishes.
+                pendingAutoInstall = session.config.installMode == InstallMode.AutoDialog
                 toast(R.string.virustotal_strict_scan_in_progress)
+                return
+            }
+
+            if (scanState.isBlockedByMalware) {
+                toast(R.string.virustotal_strict_malicious_blocked)
                 return
             }
 

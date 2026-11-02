@@ -296,8 +296,11 @@ fun NetworkPage(useBlur: Boolean, viewModel: NetworkSettingsViewModel = koinView
                             )
                         }
                         item {
+                            val keyValidated =
+                                uiState.virusTotalKeyValidation.status == VirusTotalKeyValidationStatus.VALID
                             VirusTotalScanModeWidget(
                                 currentMode = uiState.virusTotalScanMode,
+                                keyValidated = keyValidated,
                                 onModeChange = { mode ->
                                     viewModel.dispatch(
                                         NetworkSettingsAction.ChangeVirusTotalScanMode(mode),
@@ -450,6 +453,7 @@ private fun VirusTotalApiKeyWidget(
 @Composable
 private fun VirusTotalScanModeWidget(
     currentMode: VirusTotalScanMode,
+    keyValidated: Boolean,
     onModeChange: (VirusTotalScanMode) -> Unit,
 ) {
     val modes = listOf(
@@ -470,12 +474,23 @@ private fun VirusTotalScanModeWidget(
         VirusTotalScanMode.STRICT to stringResource(R.string.virustotal_scan_mode_strict_desc),
     )
 
+    // Normal and Strict both need a working API key, so they stay greyed out until the key has
+    // been accepted by VirusTotal. Off is always available.
     DropDownMenuWidget(
         icon = Icons.Default.Security,
         title = stringResource(R.string.virustotal_scan_mode),
-        description = descriptions[currentMode],
+        description = if (keyValidated) {
+            descriptions[currentMode]
+        } else {
+            stringResource(R.string.virustotal_scan_mode_requires_valid_key)
+        },
         choice = modes.indexOf(currentMode).coerceAtLeast(0),
         data = options,
+        disabledIndices = if (keyValidated) {
+            emptySet()
+        } else {
+            modes.mapIndexedNotNull { index, mode -> index.takeIf { mode != VirusTotalScanMode.OFF } }.toSet()
+        },
         onChoiceChange = { index ->
             modes.getOrNull(index)?.let(onModeChange)
         },
