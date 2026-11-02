@@ -329,6 +329,7 @@ private fun MiuixVirusTotalApiKeyField(
     val status = validation.status
     val statusColor = when (status) {
         VirusTotalKeyValidationStatus.VALID -> MiuixTheme.colorScheme.primary
+
         VirusTotalKeyValidationStatus.INVALID_FORMAT,
         VirusTotalKeyValidationStatus.INVALID_KEY,
         VirusTotalKeyValidationStatus.NETWORK_ERROR,

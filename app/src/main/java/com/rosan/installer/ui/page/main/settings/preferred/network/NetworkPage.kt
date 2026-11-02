@@ -323,6 +323,7 @@ private fun VirusTotalApiKeyWidget(
     val status = validation.status
     val statusColor = when (status) {
         VirusTotalKeyValidationStatus.VALID -> MaterialTheme.colorScheme.primary
+
         VirusTotalKeyValidationStatus.INVALID_FORMAT,
         VirusTotalKeyValidationStatus.INVALID_KEY,
         VirusTotalKeyValidationStatus.NETWORK_ERROR,

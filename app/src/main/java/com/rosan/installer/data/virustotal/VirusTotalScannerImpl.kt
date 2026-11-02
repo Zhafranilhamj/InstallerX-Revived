@@ -57,6 +57,7 @@ class VirusTotalScannerImpl(
             client.newCall(request).execute().use { response ->
                 when (response.code) {
                     HTTP_OK -> Result.success(Unit)
+
                     HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> Result.failure(
                         VirusTotalException(
                             kind = VirusTotalErrorKind.INVALID_API_KEY,
@@ -92,75 +93,74 @@ class VirusTotalScannerImpl(
         }
     }
 
-    override suspend fun lookupByHash(apiKey: String, sha256: String): VirusTotalReport =
-        withContext(Dispatchers.IO) {
-            val normalizedHash = sha256.trim().lowercase()
-            val request = Request.Builder()
-                .url("$BASE_URL/files/$normalizedHash")
-                .header(API_KEY_HEADER, apiKey)
-                .build()
+    override suspend fun lookupByHash(apiKey: String, sha256: String): VirusTotalReport = withContext(Dispatchers.IO) {
+        val normalizedHash = sha256.trim().lowercase()
+        val request = Request.Builder()
+            .url("$BASE_URL/files/$normalizedHash")
+            .header(API_KEY_HEADER, apiKey)
+            .build()
 
-            try {
-                client.newCall(request).execute().use { response ->
-                    when (response.code) {
-                        HTTP_OK -> {
-                            val body = response.body?.string()
-                                ?: throw VirusTotalException(
-                                    VirusTotalErrorKind.UNKNOWN,
-                                    "VirusTotal returned an empty report.",
-                                )
-                            val parsed = decode<VtFileResponse>(body)
-                            val attributes = parsed.data?.attributes
-                            val stats = attributes?.last_analysis_stats
-                            if (attributes == null || stats == null) {
-                                throw VirusTotalException(
-                                    kind = VirusTotalErrorKind.NOT_FOUND,
-                                    message = "VirusTotal has no report for this hash yet.",
-                                )
-                            }
-                            parseReport(
-                                stats = stats,
-                                results = attributes.last_analysis_results,
-                                sha256 = attributes.sha256 ?: normalizedHash,
-                                fileName = attributes.meaningful_name,
-                                fileSize = attributes.size,
-                                method = VirusTotalScanMethod.HASH,
+        try {
+            client.newCall(request).execute().use { response ->
+                when (response.code) {
+                    HTTP_OK -> {
+                        val body = response.body?.string()
+                            ?: throw VirusTotalException(
+                                VirusTotalErrorKind.UNKNOWN,
+                                "VirusTotal returned an empty report.",
+                            )
+                        val parsed = decode<VtFileResponse>(body)
+                        val attributes = parsed.data?.attributes
+                        val stats = attributes?.last_analysis_stats
+                        if (attributes == null || stats == null) {
+                            throw VirusTotalException(
+                                kind = VirusTotalErrorKind.NOT_FOUND,
+                                message = "VirusTotal has no report for this hash yet.",
                             )
                         }
-
-                        HTTP_NOT_FOUND -> throw VirusTotalException(
-                            kind = VirusTotalErrorKind.NOT_FOUND,
-                            message = "VirusTotal has no report for this hash yet.",
-                        )
-
-                        HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(
-                            kind = VirusTotalErrorKind.INVALID_API_KEY,
-                            message = "VirusTotal rejected this API key.",
-                        )
-
-                        HTTP_TOO_MANY_REQUESTS -> throw VirusTotalException(
-                            kind = VirusTotalErrorKind.QUOTA_EXCEEDED,
-                            message = "The VirusTotal API quota has been exceeded.",
-                        )
-
-                        else -> throw VirusTotalException(
-                            kind = VirusTotalErrorKind.UNKNOWN,
-                            message = "VirusTotal returned HTTP ${response.code}.",
+                        parseReport(
+                            stats = stats,
+                            results = attributes.last_analysis_results,
+                            sha256 = attributes.sha256 ?: normalizedHash,
+                            fileName = attributes.meaningful_name,
+                            fileSize = attributes.size,
+                            method = VirusTotalScanMethod.HASH,
                         )
                     }
+
+                    HTTP_NOT_FOUND -> throw VirusTotalException(
+                        kind = VirusTotalErrorKind.NOT_FOUND,
+                        message = "VirusTotal has no report for this hash yet.",
+                    )
+
+                    HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(
+                        kind = VirusTotalErrorKind.INVALID_API_KEY,
+                        message = "VirusTotal rejected this API key.",
+                    )
+
+                    HTTP_TOO_MANY_REQUESTS -> throw VirusTotalException(
+                        kind = VirusTotalErrorKind.QUOTA_EXCEEDED,
+                        message = "The VirusTotal API quota has been exceeded.",
+                    )
+
+                    else -> throw VirusTotalException(
+                        kind = VirusTotalErrorKind.UNKNOWN,
+                        message = "VirusTotal returned HTTP ${response.code}.",
+                    )
                 }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: VirusTotalException) {
-                throw error
-            } catch (error: IOException) {
-                Timber.w(error, "Could not reach VirusTotal for hash lookup")
-                throw VirusTotalException(
-                    kind = VirusTotalErrorKind.NETWORK_ERROR,
-                    message = "Could not reach VirusTotal.",
-                )
             }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: VirusTotalException) {
+            throw error
+        } catch (error: IOException) {
+            Timber.w(error, "Could not reach VirusTotal for hash lookup")
+            throw VirusTotalException(
+                kind = VirusTotalErrorKind.NETWORK_ERROR,
+                message = "Could not reach VirusTotal.",
+            )
         }
+    }
 
     override suspend fun uploadAndScan(
         apiKey: String,
@@ -336,17 +336,15 @@ class VirusTotalScannerImpl(
         )
     }
 
-    private inline fun <reified T> decode(body: String): T {
-        return try {
-            json.decodeFromString<T>(body)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            throw VirusTotalException(
-                kind = VirusTotalErrorKind.UNKNOWN,
-                message = "Could not parse the VirusTotal response.",
-            )
-        }
+    private inline fun <reified T> decode(body: String): T = try {
+        json.decodeFromString<T>(body)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        throw VirusTotalException(
+            kind = VirusTotalErrorKind.UNKNOWN,
+            message = "Could not parse the VirusTotal response.",
+        )
     }
 
     private fun parseReport(

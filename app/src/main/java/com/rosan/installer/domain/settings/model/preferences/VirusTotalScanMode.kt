@@ -12,10 +12,10 @@ package com.rosan.installer.domain.settings.model.preferences
 enum class VirusTotalScanMode(val value: String) {
     OFF("Off"),
     NORMAL("Normal"),
-    STRICT("Strict");
+    STRICT("Strict"),
+    ;
 
     companion object {
-        fun fromValueOrDefault(value: String?): VirusTotalScanMode =
-            entries.firstOrNull { it.value == value } ?: OFF
+        fun fromValueOrDefault(value: String?): VirusTotalScanMode = entries.firstOrNull { it.value == value } ?: OFF
     }
 }
