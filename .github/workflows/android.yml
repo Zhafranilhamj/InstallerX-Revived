@@ -38,7 +38,7 @@ concurrency:
 permissions:
   contents: read
   packages: read
-  issues: write
+  checks: write
 
 jobs:
   build_apk:
@@ -102,8 +102,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           {
-            echo "## CI debug output"
-            echo ""
             echo "Test exit code: ${{ steps.tests.outputs.status }}"
             echo "Build exit code: ${{ steps.build.outputs.status }}"
             echo ""
@@ -117,7 +115,13 @@ jobs:
             tail -n 250 /tmp/build-output.txt 2>/dev/null || true
             echo '```'
           } > /tmp/report.md
-          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
+          gh api repos/${{ github.repository }}/check-runs \
+            -f name="CI debug output" \
+            -f head_sha="${{ github.sha }}" \
+            -f status="completed" \
+            -f conclusion="neutral" \
+            -f "output[title]=CI debug output" \
+            -f "output[summary]=$(cat /tmp/report.md)"
 
       - name: Upload APK
         if: steps.build.outputs.status == '0'
