@@ -5,6 +5,7 @@
 package com.rosan.installer.ui.page.main.settings.preferred.network
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -21,12 +22,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -48,16 +54,20 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rosan.installer.R
 import com.rosan.installer.domain.settings.model.config.NetworkSourceMode
 import com.rosan.installer.domain.settings.model.preferences.GithubUpdateChannel
 import com.rosan.installer.domain.settings.model.preferences.HttpProfile
+import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.ui.icons.AppIcons
 import com.rosan.installer.ui.navigation.LocalNavigator
 import com.rosan.installer.ui.page.main.widget.dialog.CustomGithubProxyUrlDialog
 import com.rosan.installer.ui.page.main.widget.dialog.GithubUpdateChannelSelectionDialog
+import com.rosan.installer.ui.page.main.widget.setting.BaseItemContainer
 import com.rosan.installer.ui.page.main.widget.setting.BaseWidget
 import com.rosan.installer.ui.page.main.widget.setting.DropDownMenuWidget
 import com.rosan.installer.ui.page.main.widget.setting.ExpressiveBackButton
@@ -265,9 +275,210 @@ fun NetworkPage(useBlur: Boolean, viewModel: NetworkSettingsViewModel = koinView
                         }
                     }
                 }
+                item {
+                    SegmentedColumn(
+                        title = stringResource(R.string.virustotal_settings_title),
+                    ) {
+                        item {
+                            VirusTotalApiKeyWidget(
+                                apiKey = uiState.virusTotalApiKey,
+                                validation = uiState.virusTotalKeyValidation,
+                                onValueChange = { key ->
+                                    viewModel.dispatch(
+                                        NetworkSettingsAction.ChangeVirusTotalApiKey(key),
+                                    )
+                                },
+                                onValidate = {
+                                    viewModel.dispatch(
+                                        NetworkSettingsAction.ValidateVirusTotalApiKey,
+                                    )
+                                },
+                            )
+                        }
+                        item {
+                            VirusTotalScanModeWidget(
+                                currentMode = uiState.virusTotalScanMode,
+                                onModeChange = { mode ->
+                                    viewModel.dispatch(
+                                        NetworkSettingsAction.ChangeVirusTotalScanMode(mode),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun VirusTotalApiKeyWidget(
+    apiKey: String,
+    validation: VirusTotalKeyValidation,
+    onValueChange: (String) -> Unit,
+    onValidate: () -> Unit,
+) {
+    var showKey by rememberSaveable { mutableStateOf(false) }
+    val status = validation.status
+    val statusColor = when (status) {
+        VirusTotalKeyValidationStatus.VALID -> MaterialTheme.colorScheme.primary
+        VirusTotalKeyValidationStatus.INVALID_FORMAT,
+        VirusTotalKeyValidationStatus.INVALID_KEY,
+        VirusTotalKeyValidationStatus.NETWORK_ERROR,
+        VirusTotalKeyValidationStatus.QUOTA_EXCEEDED,
+        VirusTotalKeyValidationStatus.UNKNOWN,
+        -> MaterialTheme.colorScheme.error
+
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val statusText = when (status) {
+        VirusTotalKeyValidationStatus.IDLE -> stringResource(R.string.virustotal_api_key_hint)
+        VirusTotalKeyValidationStatus.VALIDATING -> stringResource(R.string.virustotal_api_key_validating)
+        VirusTotalKeyValidationStatus.VALID -> stringResource(R.string.virustotal_api_key_ready)
+        VirusTotalKeyValidationStatus.INVALID_FORMAT -> stringResource(R.string.virustotal_api_key_invalid_format)
+        VirusTotalKeyValidationStatus.INVALID_KEY -> stringResource(R.string.virustotal_api_key_invalid)
+        VirusTotalKeyValidationStatus.NETWORK_ERROR -> stringResource(R.string.virustotal_api_key_network_error)
+        VirusTotalKeyValidationStatus.QUOTA_EXCEEDED -> stringResource(R.string.virustotal_api_key_quota_exceeded)
+        VirusTotalKeyValidationStatus.UNKNOWN -> stringResource(R.string.virustotal_api_key_unknown_error)
+    }
+
+    BaseItemContainer {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = AppIcons.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = stringResource(R.string.virustotal_api_key),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            Text(
+                text = stringResource(R.string.virustotal_api_key_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                placeholder = { Text(stringResource(R.string.virustotal_api_key_placeholder)) },
+                singleLine = true,
+                visualTransformation = if (showKey) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                trailingIcon = {
+                    IconButton(onClick = { showKey = !showKey }) {
+                        Icon(
+                            imageVector = if (showKey) {
+                                Icons.Default.VisibilityOff
+                            } else {
+                                Icons.Default.Visibility
+                            },
+                            contentDescription = if (showKey) {
+                                stringResource(R.string.virustotal_hide_key)
+                            } else {
+                                stringResource(R.string.virustotal_show_key)
+                            },
+                        )
+                    }
+                },
+                isError = status == VirusTotalKeyValidationStatus.INVALID_FORMAT ||
+                    status == VirusTotalKeyValidationStatus.INVALID_KEY,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (status == VirusTotalKeyValidationStatus.VALIDATING) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                } else if (status == VirusTotalKeyValidationStatus.VALID) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = statusColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                } else if (status != VirusTotalKeyValidationStatus.IDLE) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        tint = statusColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                }
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = statusColor,
+                    modifier = Modifier.weight(1f),
+                )
+                if (apiKey.isNotBlank() && status != VirusTotalKeyValidationStatus.VALIDATING) {
+                    TextButton(onClick = onValidate) {
+                        Text(text = stringResource(R.string.virustotal_check_key))
+                    }
+                }
+            }
+            Text(
+                text = stringResource(R.string.virustotal_api_key_stored_locally),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun VirusTotalScanModeWidget(
+    currentMode: VirusTotalScanMode,
+    onModeChange: (VirusTotalScanMode) -> Unit,
+) {
+    val modes = listOf(
+        VirusTotalScanMode.OFF,
+        VirusTotalScanMode.NORMAL,
+        VirusTotalScanMode.STRICT,
+    )
+    val options = modes.map { mode ->
+        when (mode) {
+            VirusTotalScanMode.OFF -> stringResource(R.string.virustotal_scan_mode_off)
+            VirusTotalScanMode.NORMAL -> stringResource(R.string.virustotal_scan_mode_normal)
+            VirusTotalScanMode.STRICT -> stringResource(R.string.virustotal_scan_mode_strict)
+        }
+    }
+    val descriptions = mapOf(
+        VirusTotalScanMode.OFF to stringResource(R.string.virustotal_scan_mode_off_desc),
+        VirusTotalScanMode.NORMAL to stringResource(R.string.virustotal_scan_mode_normal_desc),
+        VirusTotalScanMode.STRICT to stringResource(R.string.virustotal_scan_mode_strict_desc),
+    )
+
+    DropDownMenuWidget(
+        icon = AppIcons.Security,
+        title = stringResource(R.string.virustotal_scan_mode),
+        description = descriptions[currentMode],
+        choice = modes.indexOf(currentMode).coerceAtLeast(0),
+        data = options,
+        onChoiceChange = { index ->
+            modes.getOrNull(index)?.let(onModeChange)
+        },
+    )
 }
 
 @Composable

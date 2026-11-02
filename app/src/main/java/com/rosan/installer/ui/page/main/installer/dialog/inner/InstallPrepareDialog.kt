@@ -36,9 +36,11 @@ import com.rosan.installer.domain.engine.model.packageinfo.AppEntity
 import com.rosan.installer.domain.engine.model.packageinfo.sortedBest
 import com.rosan.installer.domain.engine.model.source.DataType
 import com.rosan.installer.domain.engine.usecase.AnalyzeInstallStateUseCase
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.ui.icons.AppIcons
 import com.rosan.installer.ui.page.main.installer.InstallerViewAction
 import com.rosan.installer.ui.page.main.installer.InstallerViewModel
+import com.rosan.installer.ui.page.main.installer.components.VirusTotalScanCard
 import com.rosan.installer.ui.page.main.installer.components.WarningTextBlock
 import com.rosan.installer.ui.page.main.installer.components.failedIcon
 import com.rosan.installer.ui.page.main.installer.dialog.DialogButton
@@ -469,6 +471,28 @@ fun installPrepareDialog(viewModel: InstallerViewModel): DialogParams {
                         )
                     }
                 }
+
+                item {
+                    VirusTotalScanCard(
+                        state = uiState.virusTotalScan,
+                        onScanByHash = {
+                            viewModel.dispatch(
+                                InstallerViewAction.ScanWithVirusTotal(
+                                    data = primaryEntity.data.getSourceTop(),
+                                    method = VirusTotalScanMethod.HASH,
+                                ),
+                            )
+                        },
+                        onUpload = {
+                            viewModel.dispatch(
+                                InstallerViewAction.ScanWithVirusTotal(
+                                    data = primaryEntity.data.getSourceTop(),
+                                    method = VirusTotalScanMethod.UPLOAD,
+                                ),
+                            )
+                        },
+                    )
+                }
             }
         },
         buttons = dialogButtons(
@@ -514,6 +538,7 @@ fun installPrepareDialog(viewModel: InstallerViewModel): DialogParams {
                         DialogButton(
                             text = stringResource(buttonTextId),
                             weight = 1f,
+                            enabled = !uiState.virusTotalScan.blocksInstallation,
                             onLongClick = {
                                 if (!settings.longClickBackgroundInstall) return@DialogButton
                                 // Trigger install directly

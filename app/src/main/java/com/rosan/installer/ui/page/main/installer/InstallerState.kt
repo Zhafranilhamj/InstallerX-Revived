@@ -37,6 +37,7 @@ data class InstallerState(
 
     val analysisResults: List<PackageAnalysisResult> = emptyList(),
     val config: ConfigModel = ConfigModel.generateOptimalDefault(),
+    val virusTotalScan: VirusTotalScanState = VirusTotalScanState(),
 
     val defaultInstallerFromSettings: String? = null,
     val managedInstallerPackages: List<NamedPackage> = emptyList(),

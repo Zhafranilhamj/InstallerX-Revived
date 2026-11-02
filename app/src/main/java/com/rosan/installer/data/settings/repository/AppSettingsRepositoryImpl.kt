@@ -19,6 +19,7 @@ import com.rosan.installer.domain.settings.model.preferences.PredictiveBackAnima
 import com.rosan.installer.domain.settings.model.preferences.PredictiveBackExitDirection
 import com.rosan.installer.domain.settings.model.preferences.RootMode
 import com.rosan.installer.domain.settings.model.preferences.SmartAuthorizerPreferences
+import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.settings.model.preferences.theme.PaletteStyle
 import com.rosan.installer.domain.settings.model.preferences.theme.ThemeColorSpec
 import com.rosan.installer.domain.settings.model.preferences.theme.ThemeMode
@@ -133,6 +134,11 @@ class AppSettingsRepositoryImpl(
             allowInternetAccess = prefs[AppDataStore.ALLOW_INTERNET_ACCESS] ?: true,
             githubUpdateChannel = githubUpdateChannel,
             customGithubProxyUrl = customGithubProxyUrl,
+            // VirusTotal
+            virusTotalApiKey = prefs[AppDataStore.VIRUSTOTAL_API_KEY] ?: "",
+            virusTotalScanMode = VirusTotalScanMode.fromValueOrDefault(
+                prefs[AppDataStore.VIRUSTOTAL_SCAN_MODE],
+            ),
             // Lab
             labRootEnableModuleFlash = prefs[AppDataStore.LAB_ENABLE_MODULE_FLASH] ?: false,
             labRootShowModuleArt = prefs[AppDataStore.LAB_MODULE_FLASH_SHOW_ART] ?: true,
@@ -231,6 +237,8 @@ class AppSettingsRepositoryImpl(
         StringSetting.PredictiveBackExitDirection -> AppDataStore.PREDICTIVE_BACK_EXIT_DIRECTION
         StringSetting.GithubUpdateChannel -> AppDataStore.GITHUB_UPDATE_CHANNEL
         StringSetting.CustomGithubProxyUrl -> AppDataStore.CUSTOM_GITHUB_PROXY_URL
+        StringSetting.VirusTotalApiKey -> AppDataStore.VIRUSTOTAL_API_KEY
+        StringSetting.VirusTotalScanMode -> AppDataStore.VIRUSTOTAL_SCAN_MODE
         StringSetting.InstallerBiometricAuthMode -> AppDataStore.INSTALLER_REQUIRE_BIOMETRIC_AUTH
         StringSetting.SmartAuthorizerCandidates -> AppDataStore.SMART_AUTHORIZER_CANDIDATES
     }

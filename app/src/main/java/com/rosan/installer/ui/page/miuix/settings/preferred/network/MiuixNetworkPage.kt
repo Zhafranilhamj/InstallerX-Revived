@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,15 +36,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rosan.installer.R
 import com.rosan.installer.domain.settings.model.config.NetworkSourceMode
 import com.rosan.installer.domain.settings.model.preferences.GithubUpdateChannel
 import com.rosan.installer.domain.settings.model.preferences.HttpProfile
+import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.ui.navigation.LocalNavigator
 import com.rosan.installer.ui.page.main.settings.preferred.network.NetworkSettingsAction
 import com.rosan.installer.ui.page.main.settings.preferred.network.NetworkSettingsViewModel
+import com.rosan.installer.ui.page.main.settings.preferred.network.VirusTotalKeyValidation
+import com.rosan.installer.ui.page.main.settings.preferred.network.VirusTotalKeyValidationStatus
 import com.rosan.installer.ui.page.miuix.widgets.MiuixBackButton
 import com.rosan.installer.ui.page.miuix.widgets.MiuixCustomGithubProxyUrlDialog
 import com.rosan.installer.ui.page.miuix.widgets.MiuixGithubUpdateChannelSelectionDialog
@@ -52,11 +61,15 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -261,10 +274,174 @@ fun MiuixNetworkPage(useBlur: Boolean, viewModel: NetworkSettingsViewModel = koi
                         )
                     }
                 }
+                item { SmallTitle(stringResource(R.string.virustotal_settings_title)) }
+                item {
+                    Card(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 12.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            MiuixVirusTotalApiKeyField(
+                                apiKey = uiState.virusTotalApiKey,
+                                validation = uiState.virusTotalKeyValidation,
+                                onValueChange = { key ->
+                                    viewModel.dispatch(
+                                        NetworkSettingsAction.ChangeVirusTotalApiKey(key),
+                                    )
+                                },
+                                onValidate = {
+                                    viewModel.dispatch(
+                                        NetworkSettingsAction.ValidateVirusTotalApiKey,
+                                    )
+                                },
+                            )
+                            HorizontalDivider()
+                            MiuixVirusTotalScanModePreference(
+                                currentMode = uiState.virusTotalScanMode,
+                                onModeChange = { mode ->
+                                    viewModel.dispatch(
+                                        NetworkSettingsAction.ChangeVirusTotalScanMode(mode),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
             }
             item { Spacer(Modifier.navigationBarsPadding()) }
         }
     }
+}
+
+@Composable
+private fun MiuixVirusTotalApiKeyField(
+    apiKey: String,
+    validation: VirusTotalKeyValidation,
+    onValueChange: (String) -> Unit,
+    onValidate: () -> Unit,
+) {
+    var showKey by rememberSaveable { mutableStateOf(false) }
+    val status = validation.status
+    val statusColor = when (status) {
+        VirusTotalKeyValidationStatus.VALID -> MiuixTheme.colorScheme.primary
+        VirusTotalKeyValidationStatus.INVALID_FORMAT,
+        VirusTotalKeyValidationStatus.INVALID_KEY,
+        VirusTotalKeyValidationStatus.NETWORK_ERROR,
+        VirusTotalKeyValidationStatus.QUOTA_EXCEEDED,
+        VirusTotalKeyValidationStatus.UNKNOWN,
+        -> MiuixTheme.colorScheme.error
+
+        else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+    }
+    val statusText = when (status) {
+        VirusTotalKeyValidationStatus.IDLE -> stringResource(R.string.virustotal_api_key_hint)
+        VirusTotalKeyValidationStatus.VALIDATING -> stringResource(R.string.virustotal_api_key_validating)
+        VirusTotalKeyValidationStatus.VALID -> stringResource(R.string.virustotal_api_key_ready)
+        VirusTotalKeyValidationStatus.INVALID_FORMAT -> stringResource(R.string.virustotal_api_key_invalid_format)
+        VirusTotalKeyValidationStatus.INVALID_KEY -> stringResource(R.string.virustotal_api_key_invalid)
+        VirusTotalKeyValidationStatus.NETWORK_ERROR -> stringResource(R.string.virustotal_api_key_network_error)
+        VirusTotalKeyValidationStatus.QUOTA_EXCEEDED -> stringResource(R.string.virustotal_api_key_quota_exceeded)
+        VirusTotalKeyValidationStatus.UNKNOWN -> stringResource(R.string.virustotal_api_key_unknown_error)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextField(
+            value = apiKey,
+            onValueChange = onValueChange,
+            label = stringResource(R.string.virustotal_api_key),
+            useLabelAsPlaceholder = true,
+            singleLine = true,
+            visualTransformation = if (showKey) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            trailingIcon = {
+                IconButton(onClick = { showKey = !showKey }) {
+                    Icon(
+                        imageVector = if (showKey) {
+                            Icons.Default.VisibilityOff
+                        } else {
+                            Icons.Default.Visibility
+                        },
+                        contentDescription = if (showKey) {
+                            stringResource(R.string.virustotal_hide_key)
+                        } else {
+                            stringResource(R.string.virustotal_show_key)
+                        },
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+            },
+        )
+        Text(
+            text = stringResource(R.string.virustotal_api_key_desc),
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (status == VirusTotalKeyValidationStatus.VALIDATING) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MiuixTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = statusText,
+                style = MiuixTheme.textStyles.body2,
+                color = statusColor,
+                modifier = Modifier.weight(1f),
+            )
+            if (apiKey.isNotBlank() && status != VirusTotalKeyValidationStatus.VALIDATING) {
+                TextButton(
+                    onClick = onValidate,
+                    text = stringResource(R.string.virustotal_check_key),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.virustotal_api_key_stored_locally),
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+    }
+}
+
+@Composable
+private fun MiuixVirusTotalScanModePreference(
+    currentMode: VirusTotalScanMode,
+    onModeChange: (VirusTotalScanMode) -> Unit,
+) {
+    val modes = linkedMapOf(
+        VirusTotalScanMode.OFF to stringResource(R.string.virustotal_scan_mode_off),
+        VirusTotalScanMode.NORMAL to stringResource(R.string.virustotal_scan_mode_normal),
+        VirusTotalScanMode.STRICT to stringResource(R.string.virustotal_scan_mode_strict),
+    )
+    val descriptions = mapOf(
+        VirusTotalScanMode.OFF to stringResource(R.string.virustotal_scan_mode_off_desc),
+        VirusTotalScanMode.NORMAL to stringResource(R.string.virustotal_scan_mode_normal_desc),
+        VirusTotalScanMode.STRICT to stringResource(R.string.virustotal_scan_mode_strict_desc),
+    )
+    val entries = modes.values.map { DropdownItem(title = it) }
+
+    WindowSpinnerPreference(
+        title = stringResource(R.string.virustotal_scan_mode),
+        summary = descriptions[currentMode],
+        items = entries,
+        selectedIndex = modes.keys.indexOf(currentMode).coerceAtLeast(0),
+        onSelectedIndexChange = { index ->
+            modes.keys.elementAtOrNull(index)?.let(onModeChange)
+        },
+    )
 }
 
 @Composable
