@@ -190,6 +190,10 @@ class AppDataStore(private val dataStore: DataStore<Preferences>, private val js
         val LAB_TRY_DIFFERENT_ARCHITECTURE =
             register(booleanPreferencesKey("lab_try_different_architecture"), PreferenceValueType.BOOLEAN)
 
+        // VirusTotal
+        val VIRUSTOTAL_API_KEY = register(stringPreferencesKey("virustotal_api_key"), PreferenceValueType.STRING)
+        val VIRUSTOTAL_SCAN_MODE = register(stringPreferencesKey("virustotal_scan_mode"), PreferenceValueType.STRING)
+
         // Network
         val ALLOW_INTERNET_ACCESS = register(booleanPreferencesKey("allow_internet_access"), PreferenceValueType.BOOLEAN)
         val NETWORK_SOURCE_MODE = register(stringPreferencesKey("network_source_mode"), PreferenceValueType.STRING)

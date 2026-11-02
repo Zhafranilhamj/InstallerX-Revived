@@ -14,6 +14,7 @@ import com.rosan.installer.di.serializationModule
 import com.rosan.installer.di.settingsModule
 import com.rosan.installer.di.updateModule
 import com.rosan.installer.di.viewModelModule
+import com.rosan.installer.di.virusTotalModule
 
 val appModules = listOf(
     viewModelModule,
@@ -28,4 +29,5 @@ val appModules = listOf(
     deviceModule,
     initModule,
     privilegedModule,
+    virusTotalModule,
 )

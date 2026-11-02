@@ -20,6 +20,8 @@ import com.rosan.installer.domain.engine.model.packageinfo.AppEntity
 import com.rosan.installer.domain.engine.model.packageinfo.PackageAnalysisResult
 import com.rosan.installer.domain.engine.model.packageinfo.analyzePackageSignatureMatch
 import com.rosan.installer.domain.engine.model.packageinfo.analyzePackageSignatureSelection
+import com.rosan.installer.domain.engine.model.packageinfo.sortedBest
+import com.rosan.installer.domain.engine.model.source.DataEntity
 import com.rosan.installer.domain.engine.model.source.DataType
 import com.rosan.installer.domain.engine.usecase.GetAppIconColorUseCase
 import com.rosan.installer.domain.engine.usecase.GetAppIconUseCase
@@ -33,8 +35,15 @@ import com.rosan.installer.domain.settings.model.config.Authorizer
 import com.rosan.installer.domain.settings.model.config.ConfigModel
 import com.rosan.installer.domain.settings.model.config.InstallMode
 import com.rosan.installer.domain.settings.model.config.InstallerMode
+import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.domain.settings.repository.BooleanSetting
+import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanOutcome
+import com.rosan.installer.domain.virustotal.usecase.ScanFileByHashUseCase
+import com.rosan.installer.domain.virustotal.usecase.UploadFileForScanUseCase
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -61,6 +70,8 @@ class InstallerViewModel(
     private val getAppIconColor: GetAppIconColorUseCase,
     private val getAppLabel: GetAppLabelUseCase,
     private val deviceCapabilityProvider: DeviceCapabilityProvider,
+    private val scanFileByHash: ScanFileByHashUseCase,
+    private val uploadFileForScan: UploadFileForScanUseCase,
 ) : ViewModel() {
 
     // Event channel for one-off side effects (e.g. Toasts)
@@ -114,6 +125,11 @@ class InstallerViewModel(
             ),
             rootMode = prefs.labRootMode,
             managedInstallerPackages = prefs.managedInstallerPackages,
+            virusTotalScan = local.virusTotalScan.copy(
+                mode = prefs.virusTotalScanMode,
+                apiKey = prefs.virusTotalApiKey,
+                networkEnabled = prefs.allowInternetAccess,
+            ),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -134,6 +150,8 @@ class InstallerViewModel(
     private var loadingStateJob: Job? = null
     private val iconJobs = mutableMapOf<String, Job>()
     private var autoInstallJob: Job? = null
+    private var scanJob: Job? = null
+    private var pendingAutoInstall = false
     private val settingsLoadingJob: Job
     private var collectRepoJob: Job? = null
     private var unknownSourcePermissionLabelPackageName: String? = null
@@ -246,6 +264,12 @@ class InstallerViewModel(
             is InstallerViewAction.SetTargetUser -> selectTargetUser(action.userId)
 
             is InstallerViewAction.ApproveSession -> session.approveConfirmation(action.sessionId, action.granted)
+
+            is InstallerViewAction.ScanWithVirusTotal -> startScan(
+                data = action.data,
+                method = action.method,
+                mandatory = false,
+            )
 
             is InstallerViewAction.ShareApp -> shareApp(action.appEntity)
 
@@ -380,7 +404,12 @@ class InstallerViewModel(
     }
 
     private fun collectRepo(session: InstallerSessionRepository) {
-        if (this.session !== session) packageSelectionsBeforeClear.clear()
+        if (this.session !== session) {
+            packageSelectionsBeforeClear.clear()
+            scanJob?.cancel()
+            pendingAutoInstall = false
+            _localState.update { it.copy(virusTotalScan = VirusTotalScanState()) }
+        }
         this.session = session
         if (session.config.enableCustomizeUser) {
             loadAvailableUsers(session.config.authorizer, session.config.customizeAuthorizer)
@@ -687,12 +716,20 @@ class InstallerViewModel(
         result.displayIcon?.asImageBitmap()?.let { result.packageName to it }
     }.toMap()
 
+    override fun onCleared() {
+        scanJob?.cancel()
+        pendingAutoInstall = false
+        super.onCleared()
+    }
+
     private fun toast(message: String) = _uiEvents.tryEmit(InstallerViewEvent.ShowToast(message))
     private fun toast(@StringRes resId: Int) = _uiEvents.tryEmit(InstallerViewEvent.ShowToastRes(resId))
 
     private fun close() {
         packageSelectionsBeforeClear.clear()
         autoInstallJob?.cancel()
+        scanJob?.cancel()
+        pendingAutoInstall = false
         collectRepoJob?.cancel()
         iconJobs.values.forEach { it.cancel() }
         iconJobs.clear()
@@ -702,6 +739,8 @@ class InstallerViewModel(
 
     private fun cancel() {
         autoInstallJob?.cancel()
+        scanJob?.cancel()
+        pendingAutoInstall = false
         iconJobs.values.forEach { it.cancel() }
         session.cancel()
     }
@@ -785,6 +824,31 @@ class InstallerViewModel(
                     },
                 )
             }
+
+            val currentScan = uiState.value.virusTotalScan
+            if (currentScan.packageName != targetPackageName) {
+                scanJob?.cancel()
+                _localState.update { state ->
+                    state.copy(
+                        virusTotalScan = currentScan.copy(
+                            status = VirusTotalScanStatus.IDLE,
+                            method = null,
+                            report = null,
+                            error = null,
+                            packageName = null,
+                            mandatory = false,
+                        ),
+                    )
+                }
+            }
+
+            if (uiState.value.virusTotalScan.mode == VirusTotalScanMode.STRICT) {
+                startScanForPackage(
+                    packageName = targetPackageName,
+                    method = VirusTotalScanMethod.UPLOAD,
+                    mandatory = true,
+                )
+            }
         } else {
             _localState.update { it.copy(stage = InstallerStage.InstallChoice) }
         }
@@ -811,7 +875,141 @@ class InstallerViewModel(
         }
     }
 
+    /**
+     * Finds the entity that represents the package the user is about to install.
+     */
+    private fun primaryEntityForPackage(packageName: String): AppEntity? {
+        val result = _localState.value.analysisResults.find { it.packageName == packageName }
+            ?: return null
+        val selected = result.appEntities.filter { it.selected }.map { it.app }
+        return selected.filterIsInstance<AppEntity.BaseEntity>().firstOrNull()
+            ?: selected.filterIsInstance<AppEntity.ModuleEntity>().firstOrNull()
+            ?: selected.filterIsInstance<AppEntity.SplitEntity>().firstOrNull()
+            ?: selected.firstOrNull()
+            ?: result.appEntities.map { it.app }.sortedBest().firstOrNull()
+    }
+
+    private fun startScanForPackage(
+        packageName: String,
+        method: VirusTotalScanMethod,
+        mandatory: Boolean,
+    ) {
+        val entity = primaryEntityForPackage(packageName)
+        if (entity == null) {
+            val current = uiState.value.virusTotalScan
+            _localState.update { state ->
+                state.copy(
+                    virusTotalScan = current.copy(
+                        status = VirusTotalScanStatus.FAILED,
+                        method = method,
+                        report = null,
+                        error = VirusTotalScanError(
+                            kind = VirusTotalErrorKind.FILE_UNREADABLE,
+                            message = "The selected file could not be read.",
+                        ),
+                        packageName = packageName,
+                        mandatory = mandatory,
+                    ),
+                )
+            }
+            return
+        }
+
+        startScan(
+            data = entity.data.getSourceTop(),
+            method = method,
+            mandatory = mandatory,
+        )
+    }
+
+    /**
+     * Runs a scan and mirrors the result into UI state. The state is set to SCANNING before the
+     * coroutine starts so Strict mode blocks the install button immediately.
+     */
+    private fun startScan(
+        data: DataEntity,
+        method: VirusTotalScanMethod,
+        mandatory: Boolean,
+    ) {
+        val packageName = _localState.value.currentPackageName
+        val current = uiState.value.virusTotalScan
+        scanJob?.cancel()
+        _localState.update { state ->
+            state.copy(
+                virusTotalScan = current.copy(
+                    status = VirusTotalScanStatus.SCANNING,
+                    method = method,
+                    report = null,
+                    error = null,
+                    packageName = packageName,
+                    mandatory = mandatory,
+                ),
+            )
+        }
+
+        scanJob = viewModelScope.launch {
+            val outcome = try {
+                if (method == VirusTotalScanMethod.HASH) {
+                    scanFileByHash(data)
+                } else {
+                    uploadFileForScan(data)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                VirusTotalScanOutcome.Failure(
+                    VirusTotalScanError(
+                        kind = VirusTotalErrorKind.UNKNOWN,
+                        message = "The VirusTotal scan could not be completed.",
+                    ),
+                )
+            }
+
+            _localState.update { state ->
+                state.copy(
+                    virusTotalScan = state.virusTotalScan.copy(
+                        status = if (outcome is VirusTotalScanOutcome.Success) {
+                            VirusTotalScanStatus.COMPLETED
+                        } else {
+                            VirusTotalScanStatus.FAILED
+                        },
+                        report = (outcome as? VirusTotalScanOutcome.Success)?.report,
+                        error = (outcome as? VirusTotalScanOutcome.Failure)?.error,
+                    ),
+                )
+            }
+
+            if (pendingAutoInstall) {
+                pendingAutoInstall = false
+                install()
+            }
+        }
+    }
+
     private fun install() {
+        val scanState = _localState.value.virusTotalScan
+        if (scanState.mode == VirusTotalScanMode.STRICT) {
+            if (scanState.status == VirusTotalScanStatus.SCANNING) {
+                toast(R.string.virustotal_strict_scan_in_progress)
+                return
+            }
+
+            if (scanState.status == VirusTotalScanStatus.IDLE) {
+                val packageName = _localState.value.currentPackageName
+                if (packageName != null) {
+                    pendingAutoInstall = session.config.installMode == InstallMode.AutoDialog
+                    startScanForPackage(
+                        packageName = packageName,
+                        method = VirusTotalScanMethod.UPLOAD,
+                        mandatory = true,
+                    )
+                    toast(R.string.virustotal_strict_scan_in_progress)
+                    return
+                }
+            }
+        }
+
+        pendingAutoInstall = false
         autoInstallJob?.cancel()
         Timber.d("Standard foreground installation triggered. Contains Module: $isInstallingModule")
         session.install(true)
