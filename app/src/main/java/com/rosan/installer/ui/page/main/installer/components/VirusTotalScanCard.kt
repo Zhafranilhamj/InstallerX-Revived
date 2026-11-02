@@ -59,14 +59,21 @@ fun VirusTotalScanCard(
 
     val uriHandler = LocalUriHandler.current
     val isStrict = state.mode == VirusTotalScanMode.STRICT
-    val canScan = state.hasApiKey && state.networkEnabled && !state.isScanning
+    val canScan = state.hasUsableApiKey && state.networkEnabled && !state.isScanning
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        color = if (state.isLikelyFalsePositive) {
+            virusTotalFalsePositiveCardColor(
+                base = MaterialTheme.colorScheme.surfaceContainerHighest,
+                onSurface = MaterialTheme.colorScheme.surface,
+            )
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -99,6 +106,12 @@ fun VirusTotalScanCard(
             if (!state.hasApiKey) {
                 Text(
                     text = stringResource(R.string.virustotal_no_api_key),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else if (!state.hasUsableApiKey) {
+                Text(
+                    text = stringResource(R.string.virustotal_scan_invalid_key),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -165,6 +178,7 @@ fun VirusTotalScanCard(
             state.report?.let { report ->
                 VirusTotalReportView(
                     report = report,
+                    strictMode = isStrict,
                     onOpenReport = { permalink ->
                         runCatching { uriHandler.openUri(permalink) }
                     },
@@ -184,10 +198,21 @@ fun VirusTotalScanCard(
             }
 
             if (isStrict && state.status == VirusTotalScanStatus.COMPLETED) {
+                // A real malicious verdict keeps the install button disabled; the card explains why.
                 Text(
-                    text = stringResource(R.string.virustotal_strict_scan_complete),
+                    text = stringResource(
+                        if (state.isBlockedByMalware) {
+                            R.string.virustotal_strict_scan_blocked
+                        } else {
+                            R.string.virustotal_strict_scan_complete
+                        },
+                    ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (state.isBlockedByMalware) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -207,22 +232,27 @@ fun VirusTotalScanCard(
 @Composable
 private fun VirusTotalReportView(
     report: VirusTotalReport,
+    strictMode: Boolean,
     onOpenReport: (String) -> Unit,
 ) {
+    val falsePositiveColor = virusTotalFalsePositiveColor(MaterialTheme.colorScheme.surface)
     val verdictColor = when (report.verdict) {
         VirusTotalVerdict.CLEAN -> MaterialTheme.colorScheme.primary
+        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> falsePositiveColor
         VirusTotalVerdict.SUSPICIOUS -> MaterialTheme.colorScheme.tertiary
         VirusTotalVerdict.MALICIOUS -> MaterialTheme.colorScheme.error
         VirusTotalVerdict.NOT_FOUND -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val verdictIcon: ImageVector = when (report.verdict) {
         VirusTotalVerdict.CLEAN -> Icons.Default.CheckCircle
+        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> Icons.Default.Warning
         VirusTotalVerdict.SUSPICIOUS -> Icons.Default.Warning
         VirusTotalVerdict.MALICIOUS -> Icons.Default.Error
         VirusTotalVerdict.NOT_FOUND -> Icons.Default.Info
     }
     val verdictText = when (report.verdict) {
         VirusTotalVerdict.CLEAN -> stringResource(R.string.virustotal_result_clean)
+        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> stringResource(R.string.virustotal_result_false_positive)
         VirusTotalVerdict.SUSPICIOUS -> stringResource(R.string.virustotal_result_suspicious)
         VirusTotalVerdict.MALICIOUS -> stringResource(R.string.virustotal_result_malicious)
         VirusTotalVerdict.NOT_FOUND -> stringResource(R.string.virustotal_result_not_found)
@@ -258,15 +288,29 @@ private fun VirusTotalReportView(
             )
         }
 
+        // Show which engines flagged the file and the name each of them reported, so the user can
+        // judge whether the detections are a real threat or a common false positive.
         if (report.detections.isNotEmpty()) {
-            val visible = report.detections.take(6)
-            val remaining = report.detections.size - visible.size
             Text(
-                text = visible.joinToString(", ") +
-                    if (remaining > 0) stringResource(R.string.virustotal_more_engines, remaining) else "",
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(R.string.virustotal_detections_title),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            report.detections.take(MAX_LISTED_DETECTIONS).forEach { detection ->
+                Text(
+                    text = detection.displayText(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            val remaining = report.detections.size - MAX_LISTED_DETECTIONS
+            if (remaining > 0) {
+                Text(
+                    text = stringResource(R.string.virustotal_more_engines, remaining),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -313,18 +357,41 @@ private fun VirusTotalReportView(
             )
         }
 
-        if (report.verdict == VirusTotalVerdict.MALICIOUS) {
-            Text(
-                text = stringResource(R.string.virustotal_scan_malicious_warning),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        } else if (report.verdict == VirusTotalVerdict.SUSPICIOUS) {
-            Text(
-                text = stringResource(R.string.virustotal_scan_suspicious_warning),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
+        when (report.verdict) {
+            VirusTotalVerdict.MALICIOUS -> {
+                Text(
+                    text = stringResource(R.string.virustotal_scan_malicious_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> {
+                Text(
+                    text = stringResource(R.string.virustotal_false_positive_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = falsePositiveColor,
+                )
+                if (strictMode) {
+                    Text(
+                        text = stringResource(R.string.virustotal_false_positive_strict_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            VirusTotalVerdict.SUSPICIOUS -> {
+                Text(
+                    text = stringResource(R.string.virustotal_scan_suspicious_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
+
+            VirusTotalVerdict.CLEAN,
+            VirusTotalVerdict.NOT_FOUND,
+            -> Unit
         }
     }
 }

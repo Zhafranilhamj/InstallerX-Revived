@@ -26,6 +26,8 @@ fun DropDownMenuWidget(
     isError: Boolean = false,
     choice: Int,
     data: List<String>,
+    /** Options that are shown greyed out and cannot be selected. */
+    disabledIndices: Set<Int> = emptySet(),
     onChoiceChange: (Int) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -49,6 +51,7 @@ fun DropDownMenuWidget(
                     val isSelected = index == choice
                     SelectableDropdownMenuItem(
                         selected = isSelected,
+                        enabled = index !in disabledIndices,
                         onClick = {
                             onChoiceChange(index)
                             dismissItem()

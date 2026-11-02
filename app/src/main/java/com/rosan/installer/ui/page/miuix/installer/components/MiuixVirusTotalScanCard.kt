@@ -33,11 +33,17 @@ import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.domain.virustotal.model.VirusTotalVerdict
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanState
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanStatus
+import com.rosan.installer.ui.page.main.installer.components.MAX_LISTED_DETECTIONS
+import com.rosan.installer.ui.page.main.installer.components.displayText
+import com.rosan.installer.ui.page.main.installer.components.virusTotalFalsePositiveCardColor
+import com.rosan.installer.ui.page.main.installer.components.virusTotalFalsePositiveColor
+import com.rosan.installer.ui.theme.miuixSheetCardColor
 import com.rosan.installer.ui.theme.miuixSheetCardColors
 import com.rosan.installer.ui.util.formatSize
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardColors
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -57,13 +63,23 @@ fun MiuixVirusTotalScanCard(
 
     val uriHandler = LocalUriHandler.current
     val isStrict = state.mode == VirusTotalScanMode.STRICT
-    val canScan = state.hasApiKey && state.networkEnabled && !state.isScanning
+    val canScan = state.hasUsableApiKey && state.networkEnabled && !state.isScanning
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
-        colors = miuixSheetCardColors(),
+        colors = if (state.isLikelyFalsePositive) {
+            CardColors(
+                color = virusTotalFalsePositiveCardColor(
+                    base = miuixSheetCardColor(),
+                    onSurface = MiuixTheme.colorScheme.onSurface,
+                ),
+                contentColor = MiuixTheme.colorScheme.onSurface,
+            )
+        } else {
+            miuixSheetCardColors()
+        },
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -97,6 +113,12 @@ fun MiuixVirusTotalScanCard(
             if (!state.hasApiKey) {
                 Text(
                     text = stringResource(R.string.virustotal_no_api_key),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.error,
+                )
+            } else if (!state.hasUsableApiKey) {
+                Text(
+                    text = stringResource(R.string.virustotal_scan_invalid_key),
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.error,
                 )
@@ -166,6 +188,7 @@ fun MiuixVirusTotalScanCard(
             state.report?.let { report ->
                 MiuixVirusTotalReportView(
                     report = report,
+                    strictMode = isStrict,
                     onOpenReport = { permalink ->
                         runCatching { uriHandler.openUri(permalink) }
                     },
@@ -185,10 +208,21 @@ fun MiuixVirusTotalScanCard(
             }
 
             if (isStrict && state.status == VirusTotalScanStatus.COMPLETED) {
+                // A real malicious verdict keeps the install button disabled; the card explains why.
                 Text(
-                    text = stringResource(R.string.virustotal_strict_scan_complete),
+                    text = stringResource(
+                        if (state.isBlockedByMalware) {
+                            R.string.virustotal_strict_scan_blocked
+                        } else {
+                            R.string.virustotal_strict_scan_complete
+                        },
+                    ),
                     style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.primary,
+                    color = if (state.isBlockedByMalware) {
+                        MiuixTheme.colorScheme.error
+                    } else {
+                        MiuixTheme.colorScheme.primary
+                    },
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -208,22 +242,27 @@ fun MiuixVirusTotalScanCard(
 @Composable
 private fun MiuixVirusTotalReportView(
     report: VirusTotalReport,
+    strictMode: Boolean,
     onOpenReport: (String) -> Unit,
 ) {
+    val falsePositiveColor = virusTotalFalsePositiveColor(MiuixTheme.colorScheme.onSurface)
     val verdictColor: Color = when (report.verdict) {
         VirusTotalVerdict.CLEAN -> MiuixTheme.colorScheme.primary
+        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> falsePositiveColor
         VirusTotalVerdict.SUSPICIOUS -> MiuixTheme.colorScheme.tertiaryContainer
         VirusTotalVerdict.MALICIOUS -> MiuixTheme.colorScheme.error
         VirusTotalVerdict.NOT_FOUND -> MiuixTheme.colorScheme.onSurfaceVariantSummary
     }
     val verdictIcon: ImageVector = when (report.verdict) {
         VirusTotalVerdict.CLEAN -> Icons.Default.CheckCircle
+        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> Icons.Default.Warning
         VirusTotalVerdict.SUSPICIOUS -> Icons.Default.Warning
         VirusTotalVerdict.MALICIOUS -> Icons.Default.Error
         VirusTotalVerdict.NOT_FOUND -> Icons.Default.Info
     }
     val verdictText = when (report.verdict) {
         VirusTotalVerdict.CLEAN -> stringResource(R.string.virustotal_result_clean)
+        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> stringResource(R.string.virustotal_result_false_positive)
         VirusTotalVerdict.SUSPICIOUS -> stringResource(R.string.virustotal_result_suspicious)
         VirusTotalVerdict.MALICIOUS -> stringResource(R.string.virustotal_result_malicious)
         VirusTotalVerdict.NOT_FOUND -> stringResource(R.string.virustotal_result_not_found)
@@ -260,15 +299,29 @@ private fun MiuixVirusTotalReportView(
             )
         }
 
+        // Show which engines flagged the file and the name each of them reported, so the user can
+        // judge whether the detections are a real threat or a common false positive.
         if (report.detections.isNotEmpty()) {
-            val visible = report.detections.take(6)
-            val remaining = report.detections.size - visible.size
             Text(
-                text = visible.joinToString(", ") +
-                    if (remaining > 0) stringResource(R.string.virustotal_more_engines, remaining) else "",
+                text = stringResource(R.string.virustotal_detections_title),
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
+            report.detections.take(MAX_LISTED_DETECTIONS).forEach { detection ->
+                Text(
+                    text = detection.displayText(),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+            val remaining = report.detections.size - MAX_LISTED_DETECTIONS
+            if (remaining > 0) {
+                Text(
+                    text = stringResource(R.string.virustotal_more_engines, remaining),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -317,18 +370,41 @@ private fun MiuixVirusTotalReportView(
             )
         }
 
-        if (report.verdict == VirusTotalVerdict.MALICIOUS) {
-            Text(
-                text = stringResource(R.string.virustotal_scan_malicious_warning),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.error,
-            )
-        } else if (report.verdict == VirusTotalVerdict.SUSPICIOUS) {
-            Text(
-                text = stringResource(R.string.virustotal_scan_suspicious_warning),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.tertiaryContainer,
-            )
+        when (report.verdict) {
+            VirusTotalVerdict.MALICIOUS -> {
+                Text(
+                    text = stringResource(R.string.virustotal_scan_malicious_warning),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.error,
+                )
+            }
+
+            VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> {
+                Text(
+                    text = stringResource(R.string.virustotal_false_positive_warning),
+                    style = MiuixTheme.textStyles.body2,
+                    color = falsePositiveColor,
+                )
+                if (strictMode) {
+                    Text(
+                        text = stringResource(R.string.virustotal_false_positive_strict_note),
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+            }
+
+            VirusTotalVerdict.SUSPICIOUS -> {
+                Text(
+                    text = stringResource(R.string.virustotal_scan_suspicious_warning),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.tertiaryContainer,
+                )
+            }
+
+            VirusTotalVerdict.CLEAN,
+            VirusTotalVerdict.NOT_FOUND,
+            -> Unit
         }
     }
 }

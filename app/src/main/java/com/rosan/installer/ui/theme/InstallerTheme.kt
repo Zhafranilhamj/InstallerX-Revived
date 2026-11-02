@@ -44,6 +44,12 @@ private val LocalUseDynamicColor = staticCompositionLocalOf { false }
 
 val LocalInstallerColorScheme = staticCompositionLocalOf<ColorScheme> { error("No ColorScheme provided") }
 
+/**
+ * Expressive motion spec is immutable but not free to build, so it is created once instead of on
+ * every recomposition of a screen.
+ */
+private val ExpressiveMotionScheme = MotionScheme.expressive()
+
 object InstallerTheme {
     val colorScheme: ColorScheme
         @Composable @ReadOnlyComposable
@@ -178,7 +184,7 @@ fun InstallerMaterialExpressiveTheme(
     // Applies Material 3 Expressive defaults including the expressive MotionScheme
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
-        motionScheme = MotionScheme.expressive(),
+        motionScheme = ExpressiveMotionScheme,
         typography = Typography,
         content = content,
     )

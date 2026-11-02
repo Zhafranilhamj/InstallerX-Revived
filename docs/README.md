@@ -33,7 +33,7 @@ The full user guide, installation instructions, advanced options, system integra
 - **System integration:** InstallerX can be locked as the default installer from the Home page status card, used with LSPosed modules such as [InxLocker](https://github.com/Chimioo/InxLocker), or installed as a replacement system package manager by advanced users.
 - **Modern UI:** Material 3 Expressive and Miuix interface styles, dark mode, dynamic color, advanced palettes, system icon packs, colorful dialogs, standard notifications, Live Activity, and Xiaomi HyperOS-style island notifications on supported Xiaomi devices.
 - **Safety controls:** package-name and SharedUID blacklists, signature mismatch and unknown-signature policy gates, permission preview, install flags, and one-time smart suggestions for selected blocked cases.
-- **VirusTotal scanning:** optional SHA-256 hash lookup or file upload in Normal mode, and mandatory upload-before-install in Strict mode. The API key is validated in Network settings and stored locally.
+- **VirusTotal scanning:** optional SHA-256 hash lookup or file upload in Normal mode, and mandatory upload-before-install in Strict mode, which refuses files that VirusTotal actually detects as malware. The API key is validated in Network settings, is required before either scanning mode can be selected, and is stored locally.
 
 ## Supported Android Versions
 
@@ -55,11 +55,13 @@ InstallerX is now published as a single APK. Network access is controlled by an 
 
 ### VirusTotal scanning
 
-Network settings include an optional VirusTotal integration. Paste a 64-character VirusTotal API key to validate it; the app shows "Ready to scan" when the key is accepted. Then choose a scan mode:
+Network settings include an optional VirusTotal integration. Paste a 64-character VirusTotal API key to validate it; the app shows "Ready to scan" when the key is accepted. **Normal** and **Strict** stay greyed out until the key has been validated, so no scan mode can be selected without a working key. Then choose a scan mode:
 
 - **Off:** no VirusTotal requests are made.
-- **Normal:** the install confirmation screen offers **Scan with VirusTotal** (SHA-256 hash lookup) and **Upload files for scanning**. Scanning is optional.
+- **Normal:** the install confirmation screen offers **Scan with VirusTotal** (SHA-256 hash lookup) and **Upload files for scanning**. Scanning is optional, and a report never blocks installation.
 - **Strict:** the file is uploaded automatically and installation is blocked until the scan finishes. If the file is larger than 32 MB or the network request fails, the app shows an error and allows installation with a warning.
+
+Scan results list the flagging engines and the name each engine reported. Detections that match the patterns VirusTotal routinely reports for repackaged or optimised APKs are shown in amber as a **likely false positive**, together with a caution that the file may still be unsafe; Strict mode still allows installing those. A report that is a real malicious verdict blocks installation in Strict mode.
 
 The API key is stored locally on the device and is only sent to VirusTotal. Scanning is disabled when the in-app network access setting is off.
 

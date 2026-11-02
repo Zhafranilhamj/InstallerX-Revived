@@ -301,8 +301,11 @@ fun MiuixNetworkPage(useBlur: Boolean, viewModel: NetworkSettingsViewModel = koi
                                 },
                             )
                             HorizontalDivider()
+                            val keyValidated =
+                                uiState.virusTotalKeyValidation.status == VirusTotalKeyValidationStatus.VALID
                             MiuixVirusTotalScanModePreference(
                                 currentMode = uiState.virusTotalScanMode,
+                                keyValidated = keyValidated,
                                 onModeChange = { mode ->
                                     viewModel.dispatch(
                                         NetworkSettingsAction.ChangeVirusTotalScanMode(mode),
@@ -421,6 +424,7 @@ private fun MiuixVirusTotalApiKeyField(
 @Composable
 private fun MiuixVirusTotalScanModePreference(
     currentMode: VirusTotalScanMode,
+    keyValidated: Boolean,
     onModeChange: (VirusTotalScanMode) -> Unit,
 ) {
     val modes = linkedMapOf(
@@ -433,11 +437,19 @@ private fun MiuixVirusTotalScanModePreference(
         VirusTotalScanMode.NORMAL to stringResource(R.string.virustotal_scan_mode_normal_desc),
         VirusTotalScanMode.STRICT to stringResource(R.string.virustotal_scan_mode_strict_desc),
     )
-    val entries = modes.values.map { DropdownItem(title = it) }
+    // Normal and Strict both need a working API key, so they stay greyed out until the key has
+    // been accepted by VirusTotal. Off is always available.
+    val entries = modes.entries.map { (mode, label) ->
+        DropdownItem(text = label, enabled = keyValidated || mode == VirusTotalScanMode.OFF)
+    }
 
     WindowSpinnerPreference(
         title = stringResource(R.string.virustotal_scan_mode),
-        summary = descriptions[currentMode],
+        summary = if (keyValidated) {
+            descriptions[currentMode]
+        } else {
+            stringResource(R.string.virustotal_scan_mode_requires_valid_key)
+        },
         items = entries,
         selectedIndex = modes.keys.indexOf(currentMode).coerceAtLeast(0),
         onSelectedIndexChange = { index ->
