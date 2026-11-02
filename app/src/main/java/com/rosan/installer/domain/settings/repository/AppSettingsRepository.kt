@@ -21,6 +21,8 @@ enum class StringSetting {
     PredictiveBackExitDirection,
     GithubUpdateChannel,
     CustomGithubProxyUrl,
+    VirusTotalApiKey,
+    VirusTotalScanMode,
     InstallerBiometricAuthMode,
     SmartAuthorizerCandidates,
 }

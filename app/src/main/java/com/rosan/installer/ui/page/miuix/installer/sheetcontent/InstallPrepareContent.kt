@@ -54,6 +54,7 @@ import com.rosan.installer.domain.engine.model.packageinfo.sortedBest
 import com.rosan.installer.domain.engine.model.source.DataType
 import com.rosan.installer.domain.engine.usecase.AnalyzeInstallStateUseCase
 import com.rosan.installer.domain.settings.model.config.Authorizer
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.ui.icons.AppIcons
 import com.rosan.installer.ui.page.main.installer.InstallerViewAction
 import com.rosan.installer.ui.page.main.installer.InstallerViewModel
@@ -62,6 +63,7 @@ import com.rosan.installer.ui.page.main.installer.mapper.InstallStateUiMapper
 import com.rosan.installer.ui.page.miuix.installer.components.AdaptiveInfoRow
 import com.rosan.installer.ui.page.miuix.installer.components.AppInfoSlot
 import com.rosan.installer.ui.page.miuix.installer.components.AppInfoState
+import com.rosan.installer.ui.page.miuix.installer.components.MiuixVirusTotalScanCard
 import com.rosan.installer.ui.page.miuix.widgets.MiuixInfoChipGroup
 import com.rosan.installer.ui.page.miuix.widgets.MiuixInstallerTipCard
 import com.rosan.installer.ui.page.miuix.widgets.MiuixNavigationItemWidget
@@ -669,6 +671,28 @@ fun InstallPrepareContent(
         val showExpandButton = rawBaseEntity != null && settings.showExtendedMenu
 
         item {
+            MiuixVirusTotalScanCard(
+                state = uiState.virusTotalScan,
+                onScanByHash = {
+                    viewModel.dispatch(
+                        InstallerViewAction.ScanWithVirusTotal(
+                            data = primaryEntity.data.getSourceTop(),
+                            method = VirusTotalScanMethod.HASH,
+                        ),
+                    )
+                },
+                onUpload = {
+                    viewModel.dispatch(
+                        InstallerViewAction.ScanWithVirusTotal(
+                            data = primaryEntity.data.getSourceTop(),
+                            method = VirusTotalScanMethod.UPLOAD,
+                        ),
+                    )
+                },
+            )
+        }
+
+        item {
             val interactionSource = remember { MutableInteractionSource() }
             val isPressed by interactionSource.collectIsPressedAsState()
             var hasLongPressed by remember { mutableStateOf(false) }
@@ -677,7 +701,7 @@ fun InstallPrepareContent(
 
             // Handle the long press delay logic
             LaunchedEffect(isPressed) {
-                if (isPressed) {
+                if (isPressed && !uiState.virusTotalScan.blocksInstallation) {
                     hasLongPressed = false
                     // Wait for the system's default long press duration
                     delay(viewConfiguration.longPressTimeoutMillis.milliseconds)
@@ -723,7 +747,7 @@ fun InstallPrepareContent(
                         // Only trigger normal install if long press didn't happen
                         if (!hasLongPressed) onInstall()
                     },
-                    enabled = canInstall,
+                    enabled = canInstall && !uiState.virusTotalScan.blocksInstallation,
                     text = stringResource(buttonTextId),
                     colors = ButtonDefaults.textButtonColorsPrimary(),
                     modifier = Modifier.weight(1f),

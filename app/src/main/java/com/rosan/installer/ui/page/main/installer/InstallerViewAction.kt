@@ -4,9 +4,11 @@ package com.rosan.installer.ui.page.main.installer
 
 import androidx.annotation.StringRes
 import com.rosan.installer.domain.engine.model.packageinfo.AppEntity
+import com.rosan.installer.domain.engine.model.source.DataEntity
 import com.rosan.installer.domain.session.model.SelectInstallEntity
 import com.rosan.installer.domain.session.repository.InstallerSessionRepository
 import com.rosan.installer.domain.settings.model.config.InstallerMode
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 
 sealed interface InstallerViewAction {
     data class CollectSession(val session: InstallerSessionRepository) : InstallerViewAction
@@ -121,4 +123,12 @@ sealed interface InstallerViewAction {
      * @param messageResId The resource ID of the message to display.
      */
     data class ShowToastRes(@param:StringRes val messageResId: Int) : InstallerViewAction
+
+    /**
+     * Runs a VirusTotal scan for the file behind [data].
+     */
+    data class ScanWithVirusTotal(
+        val data: DataEntity,
+        val method: VirusTotalScanMethod,
+    ) : InstallerViewAction
 }

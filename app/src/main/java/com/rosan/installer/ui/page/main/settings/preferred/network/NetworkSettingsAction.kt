@@ -5,6 +5,7 @@ package com.rosan.installer.ui.page.main.settings.preferred.network
 import com.rosan.installer.domain.settings.model.config.NetworkSourceMode
 import com.rosan.installer.domain.settings.model.preferences.GithubUpdateChannel
 import com.rosan.installer.domain.settings.model.preferences.HttpProfile
+import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 
 sealed interface NetworkSettingsAction {
     data class ChangeInternetAccess(val enabled: Boolean) : NetworkSettingsAction
@@ -13,4 +14,7 @@ sealed interface NetworkSettingsAction {
     data class ChangeHttpProfile(val profile: HttpProfile) : NetworkSettingsAction
     data class ChangeGithubUpdateChannel(val channel: GithubUpdateChannel) : NetworkSettingsAction
     data class ChangeCustomGithubProxyUrl(val url: String) : NetworkSettingsAction
+    data class ChangeVirusTotalApiKey(val key: String) : NetworkSettingsAction
+    data class ChangeVirusTotalScanMode(val mode: VirusTotalScanMode) : NetworkSettingsAction
+    data object ValidateVirusTotalApiKey : NetworkSettingsAction
 }

@@ -91,10 +91,12 @@ private fun InnerButton(button: DialogButton, modifier: Modifier = Modifier) {
             hasLongPressed = false
             // Wait for the system's default long press duration
             delay(viewConfiguration.longPressTimeoutMillis)
-            button.onLongClick?.let { onLongClickAction ->
-                hasLongPressed = true
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                onLongClickAction.invoke()
+            if (button.enabled) {
+                button.onLongClick?.let { onLongClickAction ->
+                    hasLongPressed = true
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClickAction.invoke()
+                }
             }
         }
     }
