@@ -39,6 +39,7 @@ permissions:
   contents: read
   packages: read
   checks: write
+  contents: write
 
 jobs:
   build_apk:
@@ -107,6 +108,20 @@ jobs:
             -f conclusion="neutral" \
             -f "output[title]=CI style output" \
             -f "output[summary]=$(cat /tmp/report.md)"
+
+      - name: Apply code style
+        if: steps.style.outputs.status != '0'
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew spotlessApply --no-configuration-cache
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+          git add -A
+          git commit -m "refactor: apply spotless formatting"
+          git push origin "HEAD:${{ github.head_ref }}"
 
       - name: Build Unstable Debug APK
         env:
