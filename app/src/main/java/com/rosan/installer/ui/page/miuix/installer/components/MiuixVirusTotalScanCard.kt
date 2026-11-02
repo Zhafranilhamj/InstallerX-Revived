@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -30,7 +31,6 @@ import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.domain.virustotal.model.VirusTotalVerdict
-import com.rosan.installer.ui.icons.AppIcons
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanState
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanStatus
 import com.rosan.installer.ui.theme.miuixSheetCardColors
@@ -71,7 +71,7 @@ fun MiuixVirusTotalScanCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = AppIcons.Security,
+                    imageVector = Icons.Default.Security,
                     contentDescription = null,
                     tint = MiuixTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
@@ -177,7 +177,7 @@ fun MiuixVirusTotalScanCard(
                     (error.kind == VirusTotalErrorKind.NETWORK_ERROR && !state.networkEnabled)
                 if (!alreadyExplained) {
                     Text(
-                        text = error.messageForDisplay(),
+                        text = error.kind.messageForDisplay(),
                         style = MiuixTheme.textStyles.body2,
                         color = MiuixTheme.colorScheme.error,
                     )

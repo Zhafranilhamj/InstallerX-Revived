@@ -347,7 +347,7 @@ private fun VirusTotalApiKeyWidget(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = AppIcons.Security,
+                    imageVector = Icons.Default.Security,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -470,7 +470,7 @@ private fun VirusTotalScanModeWidget(
     )
 
     DropDownMenuWidget(
-        icon = AppIcons.Security,
+        icon = Icons.Default.Security,
         title = stringResource(R.string.virustotal_scan_mode),
         description = descriptions[currentMode],
         choice = modes.indexOf(currentMode).coerceAtLeast(0),
