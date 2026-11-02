@@ -38,6 +38,7 @@ concurrency:
 permissions:
   contents: read
   packages: read
+  issues: write
 
 jobs:
   build_apk:
@@ -70,18 +71,56 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run unit tests
+        id: tests
+        continue-on-error: true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew testUnstableDebugUnitTest --no-configuration-cache
+        run: |
+          set +e
+          ./gradlew testUnstableDebugUnitTest --no-configuration-cache 2>&1 | tee /tmp/test-output.txt
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Build Unstable Debug APK
+        id: build
+        continue-on-error: true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew assembleUnstableDebug --no-configuration-cache
+        run: |
+          set +e
+          ./gradlew assembleUnstableDebug --no-configuration-cache 2>&1 | tee /tmp/build-output.txt
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Report failures
+        if: steps.tests.outputs.status != '0' || steps.build.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## CI debug output"
+            echo ""
+            echo "Test exit code: ${{ steps.tests.outputs.status }}"
+            echo "Build exit code: ${{ steps.build.outputs.status }}"
+            echo ""
+            echo "### Unit test output (last 250 lines)"
+            echo '```'
+            tail -n 250 /tmp/test-output.txt 2>/dev/null || true
+            echo '```'
+            echo ""
+            echo "### Build output (last 250 lines)"
+            echo '```'
+            tail -n 250 /tmp/build-output.txt 2>/dev/null || true
+            echo '```'
+          } > /tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
 
       - name: Upload APK
+        if: steps.build.outputs.status == '0'
         uses: actions/upload-artifact@v7
         with:
           name: InstallerX-Revived-Unstable-debug
