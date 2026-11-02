@@ -38,6 +38,7 @@ concurrency:
 permissions:
   contents: read
   packages: read
+  checks: write
 
 jobs:
   build_apk:
@@ -74,6 +75,38 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew testUnstableDebugUnitTest --no-configuration-cache
+
+      - name: Check code style
+        id: style
+        continue-on-error: true
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          ./gradlew spotlessCheck --no-configuration-cache 2>&1 | tee /tmp/style-output.txt
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Report style failure
+        if: steps.style.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "Style exit code: ${{ steps.style.outputs.status }}"
+            echo '```'
+            tail -n 300 /tmp/style-output.txt
+            echo '```'
+          } > /tmp/report.md
+          gh api repos/${{ github.repository }}/check-runs \
+            -f name="CI style output" \
+            -f head_sha="${{ github.event.pull_request.head.sha }}" \
+            -f status="completed" \
+            -f conclusion="neutral" \
+            -f "output[title]=CI style output" \
+            -f "output[summary]=$(cat /tmp/report.md)"
 
       - name: Build Unstable Debug APK
         env:
