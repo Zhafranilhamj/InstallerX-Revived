@@ -36,10 +36,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   packages: read
   checks: write
-  contents: write
 
 jobs:
   build_apk:
