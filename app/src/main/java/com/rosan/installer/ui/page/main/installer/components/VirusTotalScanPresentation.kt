@@ -19,8 +19,7 @@ internal const val MAX_LISTED_DETECTIONS = 5
  * The tone is chosen from the surface it is painted on so the warning stays readable in both light
  * and dark themes. This is a plain function instead of a composable so both UI families can use it.
  */
-fun virusTotalFalsePositiveColor(onSurface: Color): Color =
-    if (onSurface.luminance() < 0.5f) Color(0xFFFFC857) else Color(0xFF9A6B00)
+fun virusTotalFalsePositiveColor(onSurface: Color): Color = if (onSurface.luminance() < 0.5f) Color(0xFFFFC857) else Color(0xFF9A6B00)
 
 /**
  * The card container colour for the "likely false positive" state: the regular card colour with a
