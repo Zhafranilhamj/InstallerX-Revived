@@ -26,7 +26,7 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :spotlessKotlinGradle
 > Task :spotlessKotlinGradleApply
 > Task :spotlessApply
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793710607352.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793711213001.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
 
@@ -36,7 +36,7 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 1m 17s
+BUILD SUCCESSFUL in 1m 19s
 13 actionable tasks: 9 executed, 4 from cache
 SPOTLESS_EXIT=0
 ===== spotlessCheck =====
@@ -66,7 +66,7 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :spotlessKotlinGradle UP-TO-DATE
 > Task :spotlessKotlinGradleCheck UP-TO-DATE
 > Task :spotlessCheck UP-TO-DATE
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793710681861.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793711289091.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
 
@@ -102,17 +102,17 @@ No custom signing info. Debug build will use the default debug keystore.
 No custom signing info. Release build will use the default debug keystore.
 
 > Task :app-process:preBuild UP-TO-DATE
-> Task :hidden-api:preBuild UP-TO-DATE
 > Task :app-process:preDebugBuild UP-TO-DATE
-> Task :hidden-api:preDebugBuild UP-TO-DATE
 > Task :app:preBuild UP-TO-DATE
 > Task :app:preUnstableDebugBuild UP-TO-DATE
+> Task :hidden-api:preBuild UP-TO-DATE
+> Task :hidden-api:preDebugBuild UP-TO-DATE
 > Task :hidden-api:generateDebugResources
 > Task :app:generateUnstableDebugBuildConfig
-> Task :hidden-api:packageDebugResources
-> Task :hidden-api:processDebugNavigationResources
 > Task :app-process:extractDebugSupportedLocales
-> Task :app-process:processDebugNavigationResources FROM-CACHE
+> Task :app-process:processDebugNavigationResources
+> Task :hidden-api:packageDebugResources
+> Task :hidden-api:processDebugNavigationResources FROM-CACHE
 > Task :app-process:generateDebugBuildConfig
 > Task :app-process:generateDebugResources FROM-CACHE
 > Task :app-process:packageDebugResources
@@ -121,13 +121,13 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :app-process:javaPreCompileDebug FROM-CACHE
 > Task :app-process:writeDebugAarMetadata
 > Task :app-process:extractDeepLinksDebug
-> Task :hidden-api:parseDebugLocalResources
 > Task :app-process:parseDebugLocalResources
+> Task :hidden-api:parseDebugLocalResources
 > Task :hidden-api:generateDebugRFile
 > Task :app-process:generateDebugRFile
+> Task :app-process:processDebugManifest
 > Task :app-process:mapDebugSourceSetPaths
 > Task :hidden-api:compileDebugKotlin NO-SOURCE
-> Task :app-process:processDebugManifest
 > Task :app-process:generateDebugAssets UP-TO-DATE
 > Task :app-process:compileDebugLibraryResources
 > Task :app-process:mergeDebugAssets
@@ -137,23 +137,23 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :app:prepareLibraryDefinitionsUnstableDebug
 > Task :app:extractUnstableDebugSupportedLocales
 > Task :app:mapUnstableDebugSourceSetPaths
-> Task :app:generateUnstableDebugResources
 > Task :app:generateUnstableDebugLocaleConfig
-> Task :app:processUnstableDebugNavigationResources
+> Task :app:generateUnstableDebugResources
 > Task :app:compileUnstableDebugAidl
 > Task :app:packageUnstableDebugResources
-> Task :hidden-api:compileDebugJavaWithJavac
+> Task :app:processUnstableDebugNavigationResources
 > Task :app:javaPreCompileUnstableDebug
+> Task :app:parseUnstableDebugLocalResources
+> Task :app:checkUnstableDebugAarMetadata
+> Task :app:compileUnstableDebugNavigationResources
+> Task :app:generateUnstableDebugRFile
+> Task :hidden-api:compileDebugJavaWithJavac
 > Task :hidden-api:bundleLibCompileToJarDebug
 > Task :app-process:compileDebugKotlin NO-SOURCE
-> Task :app:parseUnstableDebugLocalResources
-> Task :app:compileUnstableDebugNavigationResources
-> Task :app:checkUnstableDebugAarMetadata
-> Task :app:generateUnstableDebugRFile
 > Task :app-process:compileDebugJavaWithJavac
+> Task :app-process:processDebugJavaRes NO-SOURCE
 > Task :app-process:bundleLibCompileToJarDebug
 > Task :app-process:bundleLibRuntimeToJarDebug
-> Task :app-process:processDebugJavaRes NO-SOURCE
 > Task :app-process:bundleLibRuntimeToDirDebug
 > Task :app:mergeUnstableDebugResources
 > Task :app:createUnstableDebugCompatibleScreenManifests
@@ -165,18 +165,18 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :app:mergeUnstableDebugNativeDebugMetadata NO-SOURCE
 > Task :app:generateUnstableDebugAssets UP-TO-DATE
 > Task :app:mergeUnstableDebugAssets
-> Task :app:compressUnstableDebugAssets
-> Task :app:generateUnstableDebugGlobalSynthetics
 > Task :app:processUnstableDebugManifestForPackage
-> Task :app:checkUnstableDebugDuplicateClasses
-> Task :app:mergeLibDexUnstableDebug
+> Task :app:compressUnstableDebugAssets
+> Task :app:processUnstableDebugResources
+> Task :app:generateUnstableDebugGlobalSynthetics
 > Task :app:mergeUnstableDebugJniLibFolders
+> Task :app:checkUnstableDebugDuplicateClasses
 > Task :app:mergeUnstableDebugNativeLibs
 
 > Task :app:stripUnstableDebugDebugSymbols
 Unable to strip the following libraries, packaging them as they are: libimage_processing_util_jni.so. Run with --info option to learn more.
 
-> Task :app:processUnstableDebugResources
+> Task :app:mergeLibDexUnstableDebug
 > Task :app:validateSigningUnstableDebug
 > Task :app:writeUnstableDebugAppMetadata
 > Task :app:writeUnstableDebugSigningConfigVersions
@@ -201,27 +201,10 @@ w: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/j
 > Task :app:compileUnstableDebugUnitTestJavaWithJavac NO-SOURCE
 > Task :app:copyRoomSchemas NO-SOURCE
 > Task :app:processUnstableDebugUnitTestJavaRes
-
 > Task :app:testUnstableDebugUnitTest
-
-LocalHttpServerTest > dashboard enforces the pin and streams a multipart upload to the installer callback FAILED
-    java.lang.AssertionError at LocalHttpServerTest.kt:45
-
-274 tests completed, 1 failed
-
-> Task :app:testUnstableDebugUnitTest FAILED
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793710684142.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793711291518.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
-
-FAILURE: Build failed with an exception.
-
-* What went wrong:
-Execution failed for task ':app:testUnstableDebugUnitTest'.
-> There were failing tests. See the report at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/build/reports/tests/testUnstableDebugUnitTest/index.html
-
-* Try:
-> Run with --scan to get full insights from a Build Scan (powered by Develocity).
 
 Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
 
@@ -229,6 +212,6 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 4m 4s
+BUILD SUCCESSFUL in 4m 2s
 88 actionable tasks: 75 executed, 4 from cache, 9 up-to-date
-BUILD_EXIT=1
+BUILD_EXIT=0
