@@ -2,6 +2,9 @@ name: Agent Verify (temporary)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'arena/**'
 
 permissions:
   contents: write
