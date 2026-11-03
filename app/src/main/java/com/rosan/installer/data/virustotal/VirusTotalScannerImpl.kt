@@ -220,7 +220,7 @@ class VirusTotalScannerImpl(
 
     override suspend fun voteOnFile(apiKey: String, sha256: String, verdict: VirusTotalCommunityVerdict) {
         withContext(Dispatchers.IO) {
-            val payload = VtVoteRequest(VtVoteData(VtVoteAttributes(verdict.apiValue)))
+            val payload = VtVoteRequest(VtVoteData(attributes = VtVoteAttributes(verdict.apiValue), type = "vote"))
             val request = Request.Builder()
                 .url("$apiBaseUrl/files/${normalizeHash(sha256)}/votes")
                 .header(API_KEY_HEADER, apiKey)
@@ -441,7 +441,7 @@ private data class VtEngineResult(val category: String? = null, val engine_name:
 private data class VtVoteRequest(val data: VtVoteData)
 
 @Serializable
-private data class VtVoteData(val attributes: VtVoteAttributes, val type: String = "vote")
+private data class VtVoteData(val attributes: VtVoteAttributes, val type: String)
 
 @Serializable
 private data class VtVoteAttributes(val verdict: String)

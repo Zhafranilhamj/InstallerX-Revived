@@ -192,8 +192,7 @@ class InstallerVirusTotalStateTest {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private inline fun <reified T> stub(crossinline answer: () -> Any? = { error("Unexpected dependency call") }): T =
-        Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, _, _ -> answer() } as T
+    private inline fun <reified T> stub(crossinline answer: () -> Any? = { error("Unexpected dependency call") }): T = Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, _, _ -> answer() } as T
 
     private companion object {
         const val KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
