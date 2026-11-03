@@ -4,6 +4,7 @@ package com.rosan.installer.ui.page.main.installer
 
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.virustotal.model.VirusTotalApiKeyFormat
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityVerdict
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
@@ -32,9 +33,21 @@ data class VirusTotalScanState(
     val error: VirusTotalScanError? = null,
     val packageName: String? = null,
     val mandatory: Boolean = false,
+    val isCommunityLoading: Boolean = false,
+    val isVoteSubmitting: Boolean = false,
+    val communityError: VirusTotalScanError? = null,
+    val submittedVote: VirusTotalCommunityVerdict? = null,
 ) {
     val isScanning: Boolean
         get() = status == VirusTotalScanStatus.SCANNING
+
+    /**
+     * Scanning, completed reports, and failures open the inline details automatically so engine
+     * counts, detection names, and the original caution messages are not hidden behind the arrow.
+     * The user can still collapse the card afterwards.
+     */
+    val shouldAutoExpandDetails: Boolean
+        get() = isScanning || status == VirusTotalScanStatus.COMPLETED || status == VirusTotalScanStatus.FAILED
 
     /**
      * Strict mode treats the VirusTotal upload scan as a gate: installation waits for the scan to
@@ -64,6 +77,10 @@ data class VirusTotalScanState(
      */
     val blocksInstallation: Boolean
         get() = (mode == VirusTotalScanMode.STRICT && isScanning) || isBlockedByMalware
+
+    val canVote: Boolean
+        get() = mode != VirusTotalScanMode.OFF && hasUsableApiKey && networkEnabled &&
+            report?.sha256 != null && !isScanning && !isVoteSubmitting
 
     val hasApiKey: Boolean
         get() = apiKey.isNotBlank()

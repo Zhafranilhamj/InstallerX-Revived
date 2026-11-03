@@ -4,9 +4,11 @@ package com.rosan.installer.di
 
 import com.rosan.installer.data.virustotal.VirusTotalScannerImpl
 import com.rosan.installer.domain.virustotal.VirusTotalScanner
+import com.rosan.installer.domain.virustotal.usecase.GetVirusTotalCommunityScoresUseCase
 import com.rosan.installer.domain.virustotal.usecase.ScanFileByHashUseCase
 import com.rosan.installer.domain.virustotal.usecase.UploadFileForScanUseCase
 import com.rosan.installer.domain.virustotal.usecase.ValidateVirusTotalApiKeyUseCase
+import com.rosan.installer.domain.virustotal.usecase.VoteOnVirusTotalFileUseCase
 import java.util.concurrent.TimeUnit
 import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
@@ -42,4 +44,6 @@ val virusTotalModule = module {
     factoryOf(::ValidateVirusTotalApiKeyUseCase)
     factoryOf(::ScanFileByHashUseCase)
     factoryOf(::UploadFileForScanUseCase)
+    factoryOf(::GetVirusTotalCommunityScoresUseCase)
+    factoryOf(::VoteOnVirusTotalFileUseCase)
 }

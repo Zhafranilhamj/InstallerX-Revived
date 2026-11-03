@@ -201,6 +201,8 @@ room3 {
 dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(platform(libs.okhttp.bom))
+    testImplementation(libs.okhttp.mockwebserver)
 
     implementation(libs.commons.compress)
     implementation(libs.xz)

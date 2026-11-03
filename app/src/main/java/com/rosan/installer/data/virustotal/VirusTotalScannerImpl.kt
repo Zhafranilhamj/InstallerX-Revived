@@ -4,43 +4,67 @@ package com.rosan.installer.data.virustotal
 
 import com.rosan.installer.domain.engine.model.source.DataEntity
 import com.rosan.installer.domain.virustotal.VirusTotalScanner
-import com.rosan.installer.domain.virustotal.calculateSha256
 import com.rosan.installer.domain.virustotal.model.VirusTotalApiKeyFormat
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityScores
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityVerdict
 import com.rosan.installer.domain.virustotal.model.VirusTotalDetection
 import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
 import com.rosan.installer.domain.virustotal.model.VirusTotalException
 import com.rosan.installer.domain.virustotal.model.VirusTotalFalsePositiveHeuristics
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
+import com.rosan.installer.domain.virustotal.model.VirusTotalUploadPolicy
 import com.rosan.installer.domain.virustotal.model.VirusTotalVerdict
 import com.rosan.installer.domain.virustotal.toHexString
 import java.io.IOException
 import java.security.MessageDigest
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import okio.BufferedSink
 import timber.log.Timber
 
 /**
- * VirusTotal API v3 client.
+ * VirusTotal API v3 client. The API key is never logged and is sent only to VirusTotal API hosts
+ * and validated single-use VirusTotal upload URLs. Upload redirects are disabled so the key cannot
+ * be forwarded to another host. Files are streamed with a bounded buffer, including large uploads.
  *
- * The API key is sent in the `x-apikey` header and is never logged. Uploads are streamed from the
- * selected [DataEntity] so large APKs do not have to be copied into memory.
+ * [baseUrl] and [pollIntervalMs] are constructor seams for local protocol tests; production uses
+ * the HTTPS VirusTotal API through Koin's default arguments.
  */
 class VirusTotalScannerImpl(
     private val client: OkHttpClient,
     private val json: Json,
+    baseUrl: String = BASE_URL,
+    private val pollIntervalMs: Long = POLL_INTERVAL_MS,
 ) : VirusTotalScanner {
+    private val apiBaseUrl = baseUrl.trimEnd('/')
+    private val apiBase = requireNotNull(apiBaseUrl.toHttpUrlOrNull()) { "Invalid VirusTotal API URL" }
+
+    // Share the connection pool, but do not forward a signed upload to a redirect destination.
+    private val uploadClient by lazy {
+        client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+    }
 
     override suspend fun validateApiKey(apiKey: String): Result<Unit> = withContext(Dispatchers.IO) {
         if (!VirusTotalApiKeyFormat.isValid(apiKey)) {
@@ -51,119 +75,39 @@ class VirusTotalScannerImpl(
                 ),
             )
         }
-
         try {
-            val request = Request.Builder()
-                .url("$BASE_URL/users/$apiKey/overall_quotas")
-                .header(API_KEY_HEADER, apiKey)
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                when (response.code) {
-                    HTTP_OK -> Result.success(Unit)
-
-                    HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> Result.failure(
-                        VirusTotalException(
-                            kind = VirusTotalErrorKind.INVALID_API_KEY,
-                            message = "VirusTotal rejected this API key.",
-                        ),
-                    )
-
-                    HTTP_TOO_MANY_REQUESTS -> Result.failure(
-                        VirusTotalException(
-                            kind = VirusTotalErrorKind.QUOTA_EXCEEDED,
-                            message = "The VirusTotal API quota has been exceeded.",
-                        ),
-                    )
-
-                    else -> Result.failure(
-                        VirusTotalException(
-                            kind = VirusTotalErrorKind.UNKNOWN,
-                            message = "VirusTotal returned HTTP ${response.code}.",
-                        ),
-                    )
-                }
-            }
+            // This endpoint also works for accounts that cannot query a particular file's scores.
+            apiGet(apiKey, "/users/$apiKey/overall_quotas", "while validating the API key")
+            Result.success(Unit)
         } catch (error: CancellationException) {
             throw error
-        } catch (error: IOException) {
-            Timber.w(error, "Could not reach VirusTotal to validate the API key")
-            Result.failure(
-                VirusTotalException(
-                    kind = VirusTotalErrorKind.NETWORK_ERROR,
-                    message = "Could not reach VirusTotal.",
-                ),
-            )
+        } catch (error: VirusTotalException) {
+            Result.failure(error)
         }
     }
 
     override suspend fun lookupByHash(apiKey: String, sha256: String): VirusTotalReport = withContext(Dispatchers.IO) {
-        val normalizedHash = sha256.trim().lowercase()
-        val request = Request.Builder()
-            .url("$BASE_URL/files/$normalizedHash")
-            .header(API_KEY_HEADER, apiKey)
-            .build()
-
-        try {
-            client.newCall(request).execute().use { response ->
-                when (response.code) {
-                    HTTP_OK -> {
-                        val body = response.body?.string()
-                            ?: throw VirusTotalException(
-                                VirusTotalErrorKind.UNKNOWN,
-                                "VirusTotal returned an empty report.",
-                            )
-                        val parsed = decode<VtFileResponse>(body)
-                        val attributes = parsed.data?.attributes
-                        val stats = attributes?.last_analysis_stats
-                        if (attributes == null || stats == null) {
-                            throw VirusTotalException(
-                                kind = VirusTotalErrorKind.NOT_FOUND,
-                                message = "VirusTotal has no report for this hash yet.",
-                            )
-                        }
-                        parseReport(
-                            stats = stats,
-                            results = attributes.last_analysis_results,
-                            sha256 = attributes.sha256 ?: normalizedHash,
-                            fileName = attributes.meaningful_name,
-                            fileSize = attributes.size,
-                            method = VirusTotalScanMethod.HASH,
-                        )
-                    }
-
-                    HTTP_NOT_FOUND -> throw VirusTotalException(
-                        kind = VirusTotalErrorKind.NOT_FOUND,
-                        message = "VirusTotal has no report for this hash yet.",
-                    )
-
-                    HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(
-                        kind = VirusTotalErrorKind.INVALID_API_KEY,
-                        message = "VirusTotal rejected this API key.",
-                    )
-
-                    HTTP_TOO_MANY_REQUESTS -> throw VirusTotalException(
-                        kind = VirusTotalErrorKind.QUOTA_EXCEEDED,
-                        message = "The VirusTotal API quota has been exceeded.",
-                    )
-
-                    else -> throw VirusTotalException(
-                        kind = VirusTotalErrorKind.UNKNOWN,
-                        message = "VirusTotal returned HTTP ${response.code}.",
-                    )
-                }
-            }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: VirusTotalException) {
-            throw error
-        } catch (error: IOException) {
-            Timber.w(error, "Could not reach VirusTotal for hash lookup")
-            throw VirusTotalException(
-                kind = VirusTotalErrorKind.NETWORK_ERROR,
-                message = "Could not reach VirusTotal.",
-            )
+        val normalizedHash = normalizeHash(sha256)
+        val body = apiGet(
+            apiKey = apiKey,
+            path = "/files/$normalizedHash",
+            operation = "while looking up the file",
+            notFoundMessage = "VirusTotal has no report for this hash yet.",
+        )
+        val attributes = decode<VtFileResponse>(body).data?.attributes
+        val stats = attributes?.last_analysis_stats
+        if (attributes == null || stats == null) {
+            throw VirusTotalException(VirusTotalErrorKind.NOT_FOUND, "VirusTotal has no report for this hash yet.")
         }
+        parseReport(
+            stats = stats,
+            results = attributes.last_analysis_results,
+            sha256 = attributes.sha256 ?: normalizedHash,
+            fileName = attributes.meaningful_name,
+            fileSize = attributes.size,
+            method = VirusTotalScanMethod.HASH,
+            communityScores = attributes.communityScores(),
+        )
     }
 
     override suspend fun uploadAndScan(
@@ -172,181 +116,244 @@ class VirusTotalScannerImpl(
         fileName: String,
     ): VirusTotalReport = withContext(Dispatchers.IO) {
         val size = data.getSize()
-        if (size > MAX_UPLOAD_BYTES) {
+        VirusTotalUploadPolicy.validationError(size)?.let { kind ->
             throw VirusTotalException(
-                kind = VirusTotalErrorKind.FILE_TOO_LARGE,
-                message = "The file is larger than the 32 MB upload limit.",
+                kind = kind,
+                message = when (kind) {
+                    VirusTotalErrorKind.FILE_TOO_LARGE -> "The file is larger than the 650 MB upload limit."
+                    else -> "The file size could not be determined for upload."
+                },
             )
         }
 
-        // Hash the file while it is streamed to VirusTotal instead of reading it twice. This keeps
-        // the dialog responsive on large APKs, where hashing and uploading used to read the whole
-        // file from storage twice before the analysis could even start.
+        val uploadUrl = if (VirusTotalUploadPolicy.requiresUploadUrl(size)) {
+            val response = apiGet(apiKey, "/files/upload_url", "while requesting an upload URL")
+            validateUploadUrl(decode<VtUploadUrlResponse>(response).data)
+        } else {
+            "$apiBaseUrl/files"
+        }
+
+        val uploadJob = currentCoroutineContext()[Job]
         val digest = MessageDigest.getInstance("SHA-256")
         var uploadSha256: String? = null
-
         val uploadBody = object : RequestBody() {
             override fun contentType(): MediaType = OCTET_STREAM
+            override fun contentLength(): Long = size
 
-            override fun contentLength(): Long = if (size >= 0) size else -1L
+            // Never replay an upload automatically: it may contain private files, and the large
+            // upload URL is single-use. A failed upload must be retried explicitly by the user.
+            override fun isOneShot(): Boolean = true
 
             override fun writeTo(sink: BufferedSink) {
-                val input = data.getInputStream()
-                    ?: throw IOException("The selected file could not be opened for upload.")
+                val input = data.getInputStream() ?: throw IOException("The selected file could not be opened for upload.")
                 digest.reset()
+                var written = 0L
+                val buffer = ByteArray(UPLOAD_BUFFER_SIZE)
                 input.use { stream ->
-                    val buffer = ByteArray(UPLOAD_BUFFER_SIZE)
-                    while (true) {
-                        val bytesRead = stream.read(buffer)
-                        if (bytesRead < 0) break
-                        digest.update(buffer, 0, bytesRead)
-                        sink.write(buffer, 0, bytesRead)
+                    while (written < size) {
+                        if (uploadJob?.isCancelled == true) throw CancellationException("VirusTotal upload cancelled")
+                        val count = stream.read(buffer, 0, minOf(buffer.size.toLong(), size - written).toInt())
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                        sink.write(buffer, 0, count)
+                        written += count
+                    }
+                    if (written != size || stream.read() != -1) {
+                        throw IOException("The selected file changed size while it was being uploaded.")
                     }
                 }
                 uploadSha256 = digest.digest().toHexString()
             }
         }
-
         val multipart = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("file", fileName, uploadBody)
             .build()
-
+        // VirusTotal's own client sends the session API key to the special upload URL as well.
+        // The URL has already been validated as a VirusTotal host, and uploadClient never follows
+        // redirects, so the key cannot leak to a redirect destination.
         val uploadRequest = Request.Builder()
-            .url("$BASE_URL/files")
+            .url(uploadUrl)
             .header(API_KEY_HEADER, apiKey)
             .post(multipart)
             .build()
+        val presignedUpload = VirusTotalUploadPolicy.requiresUploadUrl(size)
+        val uploadResponse = executeBody(
+            request = uploadRequest,
+            operation = "while uploading",
+            authorizationError = if (presignedUpload) VirusTotalErrorKind.UPLOAD_REJECTED else VirusTotalErrorKind.INVALID_API_KEY,
+            authorizationMessage = if (presignedUpload) {
+                "VirusTotal rejected the upload URL. Try uploading again."
+            } else {
+                "VirusTotal denied this request. Check the API key and its permissions."
+            },
+            httpClient = uploadClient,
+        )
+        val analysisId = decode<VtAnalysisResponse>(uploadResponse).data?.id
+            ?: throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal did not return an analysis id.")
+        val analysisSha256 = uploadSha256
+            ?: throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "The file upload did not complete.")
 
-        val analysisId = try {
-            client.newCall(uploadRequest).execute().use { response ->
-                when (response.code) {
-                    HTTP_OK -> {
-                        val body = response.body?.string()
-                            ?: throw VirusTotalException(
-                                VirusTotalErrorKind.UNKNOWN,
-                                "VirusTotal returned an empty upload response.",
-                            )
-                        decode<VtAnalysisResponse>(body).data?.id
-                            ?: throw VirusTotalException(
-                                VirusTotalErrorKind.UNKNOWN,
-                                "VirusTotal did not return an analysis id.",
-                            )
-                    }
-
-                    HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(
-                        kind = VirusTotalErrorKind.INVALID_API_KEY,
-                        message = "VirusTotal rejected this API key.",
-                    )
-
-                    HTTP_TOO_MANY_REQUESTS -> throw VirusTotalException(
-                        kind = VirusTotalErrorKind.QUOTA_EXCEEDED,
-                        message = "The VirusTotal API quota has been exceeded.",
-                    )
-
-                    else -> throw VirusTotalException(
-                        kind = VirusTotalErrorKind.UNKNOWN,
-                        message = "VirusTotal returned HTTP ${response.code} while uploading.",
-                    )
-                }
-            }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: VirusTotalException) {
-            throw error
-        } catch (error: IOException) {
-            Timber.w(error, "Could not upload the file to VirusTotal")
-            throw VirusTotalException(
-                kind = VirusTotalErrorKind.NETWORK_ERROR,
-                message = "Could not reach VirusTotal.",
-            )
-        }
-
-        // The digest is produced while the body is streamed. Fall back to a separate pass when the
-        // body was never written, so the report still carries a stable permalink.
-        val analysisSha256 = uploadSha256 ?: data.calculateSha256()
-
-        val deadline = System.currentTimeMillis() + MAX_ANALYSIS_WAIT_MS
-        while (System.currentTimeMillis() < deadline) {
-            delay(POLL_INTERVAL_MS)
-
-            val analysisRequest = Request.Builder()
-                .url("$BASE_URL/analyses/$analysisId")
-                .header(API_KEY_HEADER, apiKey)
-                .build()
-
-            val analysis = try {
-                client.newCall(analysisRequest).execute().use { response ->
-                    when (response.code) {
-                        HTTP_OK -> {
-                            val body = response.body?.string()
-                                ?: throw VirusTotalException(
-                                    VirusTotalErrorKind.UNKNOWN,
-                                    "VirusTotal returned an empty analysis.",
-                                )
-                            decode<VtAnalysisResponse>(body)
-                        }
-
-                        HTTP_NOT_FOUND -> throw VirusTotalException(
-                            kind = VirusTotalErrorKind.UNKNOWN,
-                            message = "The VirusTotal analysis could not be found.",
-                        )
-
-                        HTTP_TOO_MANY_REQUESTS -> throw VirusTotalException(
-                            kind = VirusTotalErrorKind.QUOTA_EXCEEDED,
-                            message = "The VirusTotal API quota has been exceeded.",
-                        )
-
-                        else -> throw VirusTotalException(
-                            kind = VirusTotalErrorKind.UNKNOWN,
-                            message = "VirusTotal returned HTTP ${response.code} while polling.",
-                        )
-                    }
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: VirusTotalException) {
-                throw error
-            } catch (error: IOException) {
-                Timber.w(error, "Could not poll the VirusTotal analysis")
-                throw VirusTotalException(
-                    kind = VirusTotalErrorKind.NETWORK_ERROR,
-                    message = "Could not reach VirusTotal.",
-                )
-            }
-
-            val attributes = analysis.data?.attributes
+        // VirusTotal can keep an analysis queued well past two minutes, and may deduplicate an
+        // uploaded file into an existing canonical report. Keep polling while the scan coroutine is
+        // active; per-request HTTP timeouts and coroutine cancellation still bound failures/exit.
+        var checkedPendingFileReport = false
+        while (currentCoroutineContext().isActive) {
+            delay(pollIntervalMs)
+            currentCoroutineContext().ensureActive()
+            val body = apiGet(apiKey, "/analyses/$analysisId", "while polling")
+            val attributes = decode<VtAnalysisResponse>(body).data?.attributes
             when (attributes?.status) {
                 "completed" -> {
-                    val stats = attributes?.stats
-                        ?: throw VirusTotalException(
-                            kind = VirusTotalErrorKind.UNKNOWN,
-                            message = "VirusTotal completed the analysis without statistics.",
-                        )
+                    completedUploadFileReport(apiKey, analysisSha256, fileName, size, analysisId)?.let { return@withContext it }
+                    val stats = attributes.stats ?: throw VirusTotalException(
+                        VirusTotalErrorKind.UNKNOWN,
+                        "VirusTotal completed the analysis without statistics.",
+                    )
                     return@withContext parseReport(
                         stats = stats,
-                        results = attributes?.results,
+                        results = attributes.results,
                         sha256 = analysisSha256,
                         fileName = fileName,
-                        fileSize = if (size >= 0) size else null,
+                        fileSize = size,
                         method = VirusTotalScanMethod.UPLOAD,
                         analysisId = analysisId,
                     )
                 }
 
-                "failed" -> throw VirusTotalException(
-                    kind = VirusTotalErrorKind.UNKNOWN,
-                    message = "VirusTotal failed to analyze this file.",
-                )
+                "failed" -> throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal failed to analyze this file.")
 
-                else -> Unit
+                else -> {
+                    if (!checkedPendingFileReport) {
+                        checkedPendingFileReport = true
+                        completedUploadFileReport(apiKey, analysisSha256, fileName, size, analysisId)?.let { return@withContext it }
+                    }
+                }
             }
         }
+        throw CancellationException("VirusTotal scan cancelled")
+    }
 
-        throw VirusTotalException(
-            kind = VirusTotalErrorKind.TIMEOUT,
-            message = "The VirusTotal analysis did not finish in time.",
+    override suspend fun getCommunityScores(apiKey: String, sha256: String): VirusTotalCommunityScores = withContext(Dispatchers.IO) {
+        val body = apiGet(
+            apiKey = apiKey,
+            path = "/files/${normalizeHash(sha256)}",
+            operation = "while loading community scores",
+            authorizationError = VirusTotalErrorKind.COMMUNITY_UNAVAILABLE,
         )
+        decode<VtFileResponse>(body).data?.attributes?.communityScores()
+            ?: throw VirusTotalException(VirusTotalErrorKind.COMMUNITY_UNAVAILABLE, "Community scores are unavailable.")
+    }
+
+    override suspend fun voteOnFile(apiKey: String, sha256: String, verdict: VirusTotalCommunityVerdict) {
+        withContext(Dispatchers.IO) {
+            val payload = VtVoteRequest(VtVoteData(attributes = VtVoteAttributes(verdict.apiValue), type = "vote"))
+            val request = Request.Builder()
+                .url("$apiBaseUrl/files/${normalizeHash(sha256)}/votes")
+                .header(API_KEY_HEADER, apiKey)
+                .post(json.encodeToString(VtVoteRequest.serializer(), payload).toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            val body = executeBody(request, "while submitting a vote", VirusTotalErrorKind.VOTE_FAILED)
+            val response = decode<VtVoteResponse>(body)
+            if (response.data?.attributes?.verdict != verdict.apiValue) {
+                throw VirusTotalException(VirusTotalErrorKind.VOTE_FAILED, "VirusTotal did not confirm the vote.")
+            }
+        }
+    }
+
+    private suspend fun apiGet(
+        apiKey: String,
+        path: String,
+        operation: String,
+        authorizationError: VirusTotalErrorKind = VirusTotalErrorKind.INVALID_API_KEY,
+        notFoundMessage: String = "The VirusTotal resource could not be found.",
+    ): String {
+        val request = Request.Builder().url("$apiBaseUrl$path").header(API_KEY_HEADER, apiKey).build()
+        return executeBody(request, operation, authorizationError, notFoundMessage)
+    }
+
+    private suspend fun executeBody(
+        request: Request,
+        operation: String,
+        authorizationError: VirusTotalErrorKind,
+        notFoundMessage: String = "The VirusTotal resource could not be found.",
+        authorizationMessage: String = "VirusTotal denied this request. Check the API key and its permissions.",
+        httpClient: OkHttpClient = client,
+    ): String = try {
+        httpClient.await(request).use { response ->
+            when (response.code) {
+                HTTP_OK -> response.body.string().ifEmpty {
+                    throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal returned an empty response.")
+                }
+
+                HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(authorizationError, authorizationMessage)
+
+                HTTP_NOT_FOUND -> throw VirusTotalException(VirusTotalErrorKind.NOT_FOUND, notFoundMessage)
+
+                HTTP_TOO_MANY_REQUESTS -> throw VirusTotalException(
+                    VirusTotalErrorKind.QUOTA_EXCEEDED,
+                    "The VirusTotal API quota has been exceeded.",
+                )
+
+                else -> throw VirusTotalException(
+                    VirusTotalErrorKind.UNKNOWN,
+                    "VirusTotal returned HTTP ${response.code} $operation.",
+                )
+            }
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: VirusTotalException) {
+        throw error
+    } catch (error: IOException) {
+        currentCoroutineContext().ensureActive()
+        Timber.w(error, "VirusTotal request failed")
+        throw VirusTotalException(VirusTotalErrorKind.NETWORK_ERROR, "Could not reach VirusTotal.")
+    }
+
+    /**
+     * The canonical file report carries the full engine results and community totals. A missing or
+     * still-empty file report is not a completed scan; auth/quota/network failures are propagated.
+     */
+    private suspend fun completedUploadFileReport(
+        apiKey: String,
+        sha256: String,
+        fileName: String,
+        fileSize: Long,
+        analysisId: String,
+    ): VirusTotalReport? {
+        val report = try {
+            lookupByHash(apiKey, sha256)
+        } catch (error: VirusTotalException) {
+            if (error.kind == VirusTotalErrorKind.NOT_FOUND) return null
+            throw error
+        }
+        if (report.total <= 0) return null
+        return report.copy(
+            method = VirusTotalScanMethod.UPLOAD,
+            analysisId = analysisId,
+            fileName = report.fileName ?: fileName,
+            fileSize = report.fileSize ?: fileSize,
+        )
+    }
+
+    private fun validateUploadUrl(value: String?): String {
+        val url = value?.toHttpUrlOrNull() ?: throw VirusTotalException(
+            VirusTotalErrorKind.UNKNOWN,
+            "VirusTotal returned an invalid upload URL.",
+        )
+        val trustedHost = url.host == apiBase.host ||
+            (apiBase.host == "www.virustotal.com" && (url.host == "virustotal.com" || url.host.endsWith(".virustotal.com")))
+        if (url.scheme != apiBase.scheme || !trustedHost || url.username.isNotEmpty() || url.password.isNotEmpty()) {
+            throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal returned an untrusted upload URL.")
+        }
+        return url.toString()
+    }
+
+    private fun normalizeHash(value: String): String = value.trim().lowercase().also {
+        if (!SHA256_PATTERN.matches(it)) {
+            throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "A valid SHA-256 hash is required.")
+        }
     }
 
     private inline fun <reified T> decode(body: String): T = try {
@@ -354,10 +361,7 @@ class VirusTotalScannerImpl(
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        throw VirusTotalException(
-            kind = VirusTotalErrorKind.UNKNOWN,
-            message = "Could not parse the VirusTotal response.",
-        )
+        throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "Could not parse the VirusTotal response.")
     }
 
     private fun parseReport(
@@ -368,40 +372,24 @@ class VirusTotalScannerImpl(
         fileSize: Long?,
         method: VirusTotalScanMethod,
         analysisId: String? = null,
+        communityScores: VirusTotalCommunityScores? = null,
     ): VirusTotalReport {
         val positives = stats.malicious + stats.suspicious
-        val total = stats.malicious +
-            stats.suspicious +
-            stats.undetected +
-            stats.harmless +
-            stats.timeout
-        val detections = results
-            .orEmpty()
-            .mapNotNull { (engineKey, result) ->
-                if (result.category != "malicious" && result.category != "suspicious") {
-                    return@mapNotNull null
-                }
-                val engine = result.engine_name?.takeIf { it.isNotBlank() } ?: engineKey
-                VirusTotalDetection(
-                    engine = engine,
-                    name = result.result?.trim()?.takeIf { it.isNotEmpty() },
-                )
-            }
-            .distinctBy { detection -> detection.engine.lowercase() }
-            .sortedBy { detection -> detection.engine.lowercase() }
-
-        val likelyFalsePositive = VirusTotalFalsePositiveHeuristics.isLikelyFalsePositive(
-            positives = positives,
-            total = total,
-            detections = detections,
-        )
+        val total = stats.malicious + stats.suspicious + stats.undetected + stats.harmless + stats.timeout
+        val detections = results.orEmpty().mapNotNull { (engineKey, result) ->
+            if (result.category != "malicious" && result.category != "suspicious") return@mapNotNull null
+            VirusTotalDetection(
+                engine = result.engine_name?.takeIf { it.isNotBlank() } ?: engineKey,
+                name = result.result?.trim()?.takeIf { it.isNotEmpty() },
+            )
+        }.distinctBy { it.engine.lowercase() }.sortedBy { it.engine.lowercase() }
+        val likelyFalsePositive = VirusTotalFalsePositiveHeuristics.isLikelyFalsePositive(positives, total, detections)
         val verdict = when {
             positives <= 0 -> VirusTotalVerdict.CLEAN
             likelyFalsePositive -> VirusTotalVerdict.LIKELY_FALSE_POSITIVE
             stats.malicious > 0 -> VirusTotalVerdict.MALICIOUS
             else -> VirusTotalVerdict.SUSPICIOUS
         }
-
         return VirusTotalReport(
             verdict = verdict,
             positives = positives,
@@ -413,6 +401,7 @@ class VirusTotalScannerImpl(
             fileSize = fileSize,
             method = method,
             analysisId = analysisId,
+            communityScores = communityScores,
         )
     }
 
@@ -420,29 +409,40 @@ class VirusTotalScannerImpl(
         const val BASE_URL = "https://www.virustotal.com/api/v3"
         const val GUI_BASE_URL = "https://www.virustotal.com/gui"
         const val API_KEY_HEADER = "x-apikey"
-        const val MAX_UPLOAD_BYTES = 32L * 1024L * 1024L
         const val UPLOAD_BUFFER_SIZE = 64 * 1024
-        const val POLL_INTERVAL_MS = 3_000L
-        const val MAX_ANALYSIS_WAIT_MS = 120_000L
+        const val POLL_INTERVAL_MS = 20_000L
         const val HTTP_OK = 200
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_FORBIDDEN = 403
         const val HTTP_NOT_FOUND = 404
         const val HTTP_TOO_MANY_REQUESTS = 429
+        val SHA256_PATTERN = Regex("^[a-f0-9]{64}$")
         val OCTET_STREAM: MediaType = "application/octet-stream".toMediaType()
+        val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }
 
-@Serializable
-private data class VtFileResponse(
-    val data: VtFileData? = null,
-)
+private suspend fun OkHttpClient.await(request: Request): Response = suspendCancellableCoroutine { continuation ->
+    val call = newCall(request)
+    continuation.invokeOnCancellation { call.cancel() }
+    call.enqueue(object : Callback {
+        override fun onResponse(call: Call, response: Response) {
+            continuation.resume(response) { _, cancelledResponse, _ -> cancelledResponse.close() }
+        }
+        override fun onFailure(call: Call, e: IOException) {
+            continuation.resumeWithException(e)
+        }
+    })
+}
 
 @Serializable
-private data class VtFileData(
-    val id: String? = null,
-    val attributes: VtFileAttributes? = null,
-)
+private data class VtUploadUrlResponse(val data: String? = null)
+
+@Serializable
+private data class VtFileResponse(val data: VtFileData? = null)
+
+@Serializable
+private data class VtFileData(val attributes: VtFileAttributes? = null)
 
 @Serializable
 private data class VtFileAttributes(
@@ -451,18 +451,22 @@ private data class VtFileAttributes(
     val meaningful_name: String? = null,
     val size: Long? = null,
     val sha256: String? = null,
+    val total_votes: VtCommunityVotes? = null,
+    val reputation: Int = 0,
 )
 
 @Serializable
-private data class VtAnalysisResponse(
-    val data: VtAnalysisData? = null,
-)
+private data class VtCommunityVotes(val harmless: Int = 0, val malicious: Int = 0)
+
+private fun VtFileAttributes.communityScores(): VirusTotalCommunityScores? = total_votes?.let {
+    VirusTotalCommunityScores(it.harmless.coerceAtLeast(0), it.malicious.coerceAtLeast(0), reputation)
+}
 
 @Serializable
-private data class VtAnalysisData(
-    val id: String? = null,
-    val attributes: VtAnalysisAttributes? = null,
-)
+private data class VtAnalysisResponse(val data: VtAnalysisData? = null)
+
+@Serializable
+private data class VtAnalysisData(val id: String? = null, val attributes: VtAnalysisAttributes? = null)
 
 @Serializable
 private data class VtAnalysisAttributes(
@@ -481,8 +485,16 @@ private data class VtStats(
 )
 
 @Serializable
-private data class VtEngineResult(
-    val category: String? = null,
-    val engine_name: String? = null,
-    val result: String? = null,
-)
+private data class VtEngineResult(val category: String? = null, val engine_name: String? = null, val result: String? = null)
+
+@Serializable
+private data class VtVoteRequest(val data: VtVoteData)
+
+@Serializable
+private data class VtVoteData(val attributes: VtVoteAttributes, val type: String)
+
+@Serializable
+private data class VtVoteAttributes(val verdict: String)
+
+@Serializable
+private data class VtVoteResponse(val data: VtVoteData? = null)

@@ -3,6 +3,10 @@
 package com.rosan.installer.di
 
 import com.rosan.installer.domain.session.repository.InstallerSessionRepository
+import com.rosan.installer.domain.virustotal.usecase.GetVirusTotalCommunityScoresUseCase
+import com.rosan.installer.domain.virustotal.usecase.ScanFileByHashUseCase
+import com.rosan.installer.domain.virustotal.usecase.UploadFileForScanUseCase
+import com.rosan.installer.domain.virustotal.usecase.VoteOnVirusTotalFileUseCase
 import com.rosan.installer.ui.page.main.installer.InstallerViewModel
 import com.rosan.installer.ui.page.main.settings.SettingsSharedViewModel
 import com.rosan.installer.ui.page.main.settings.config.all.AllViewModel
@@ -49,8 +53,10 @@ val viewModelModule = module {
             get(),
             get(),
             get(),
-            get(),
-            get(),
+            lazy { get<ScanFileByHashUseCase>() },
+            lazy { get<UploadFileForScanUseCase>() },
+            lazy { get<GetVirusTotalCommunityScoresUseCase>() },
+            lazy { get<VoteOnVirusTotalFileUseCase>() },
         )
     }
 

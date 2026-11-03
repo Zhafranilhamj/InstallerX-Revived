@@ -142,17 +142,23 @@ data class VirusTotalReport(
     val fileSize: Long? = null,
     val method: VirusTotalScanMethod,
     val analysisId: String? = null,
+    val communityScores: VirusTotalCommunityScores? = null,
 )
 
 /**
  * The reason a VirusTotal request could not produce a report.
  */
 enum class VirusTotalErrorKind {
+    SCAN_DISABLED,
+    COMMUNITY_UNAVAILABLE,
+    VOTE_FAILED,
+    VOTE_REFRESH_FAILED,
     NO_API_KEY,
     INVALID_API_KEY,
     NETWORK_ERROR,
     FILE_TOO_LARGE,
     FILE_UNREADABLE,
+    UPLOAD_REJECTED,
     NOT_FOUND,
     QUOTA_EXCEEDED,
     TIMEOUT,

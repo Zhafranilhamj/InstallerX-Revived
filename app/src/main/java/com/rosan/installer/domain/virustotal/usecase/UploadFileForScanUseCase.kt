@@ -10,17 +10,13 @@ import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
 import com.rosan.installer.domain.virustotal.model.VirusTotalException
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanOutcome
+import com.rosan.installer.domain.virustotal.model.VirusTotalUploadPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
-/**
- * Uploads a file to VirusTotal and waits for the analysis to finish.
- *
- * The public VirusTotal API accepts direct uploads up to 32 MB. Larger files are rejected with a
- * typed error so the UI can explain the limitation and let the user decide how to proceed.
- */
+/** Streams files up to 650 MB, using VirusTotal's special upload URL above 32 MB. */
 class UploadFileForScanUseCase(
     private val scanner: VirusTotalScanner,
     private val appSettingsRepo: AppSettingsRepository,
@@ -32,33 +28,28 @@ class UploadFileForScanUseCase(
             throw error
         } catch (error: Exception) {
             return@withContext VirusTotalScanOutcome.Failure(
-                VirusTotalScanError(
-                    kind = VirusTotalErrorKind.UNKNOWN,
-                    message = "Could not read the VirusTotal settings.",
-                ),
+                VirusTotalScanError(VirusTotalErrorKind.UNKNOWN, "Could not read the VirusTotal settings."),
             )
         }
-        preflight.blockingError()?.let { error ->
-            return@withContext VirusTotalScanOutcome.Failure(error)
-        }
+        preflight.blockingError()?.let { return@withContext VirusTotalScanOutcome.Failure(it) }
 
         val size = data.getSize()
-        if (size > MAX_UPLOAD_BYTES) {
+        VirusTotalUploadPolicy.validationError(size)?.let { kind ->
             return@withContext VirusTotalScanOutcome.Failure(
                 VirusTotalScanError(
-                    kind = VirusTotalErrorKind.FILE_TOO_LARGE,
-                    message = "The file is larger than the 32 MB upload limit.",
+                    kind = kind,
+                    message = when (kind) {
+                        VirusTotalErrorKind.FILE_TOO_LARGE -> "The file is larger than the 650 MB upload limit."
+                        else -> "The file size could not be determined for upload."
+                    },
                 ),
             )
         }
 
         try {
-            val report = scanner.uploadAndScan(
-                apiKey = preflight.apiKey,
-                data = data,
-                fileName = data.displayName(),
+            VirusTotalScanOutcome.Success(
+                scanner.uploadAndScan(apiKey = preflight.apiKey, data = data, fileName = data.displayName()),
             )
-            VirusTotalScanOutcome.Success(report)
         } catch (error: CancellationException) {
             throw error
         } catch (error: VirusTotalException) {
@@ -67,15 +58,8 @@ class UploadFileForScanUseCase(
         } catch (error: Exception) {
             Timber.e(error, "Unexpected VirusTotal upload failure")
             VirusTotalScanOutcome.Failure(
-                VirusTotalScanError(
-                    kind = VirusTotalErrorKind.NETWORK_ERROR,
-                    message = error.message ?: "Could not reach VirusTotal.",
-                ),
+                VirusTotalScanError(VirusTotalErrorKind.NETWORK_ERROR, error.message ?: "Could not reach VirusTotal."),
             )
         }
-    }
-
-    private companion object {
-        const val MAX_UPLOAD_BYTES = 32L * 1024L * 1024L
     }
 }

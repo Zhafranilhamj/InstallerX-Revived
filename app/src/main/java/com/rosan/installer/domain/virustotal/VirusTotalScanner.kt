@@ -3,6 +3,8 @@
 package com.rosan.installer.domain.virustotal
 
 import com.rosan.installer.domain.engine.model.source.DataEntity
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityScores
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityVerdict
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 
 /**
@@ -31,4 +33,10 @@ interface VirusTotalScanner {
         data: DataEntity,
         fileName: String,
     ): VirusTotalReport
+
+    /** Reads the file's community totals without changing its antivirus verdict. */
+    suspend fun getCommunityScores(apiKey: String, sha256: String): VirusTotalCommunityScores
+
+    /** Submits a public vote using the configured VirusTotal account. */
+    suspend fun voteOnFile(apiKey: String, sha256: String, verdict: VirusTotalCommunityVerdict)
 }

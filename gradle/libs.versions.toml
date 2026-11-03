@@ -142,6 +142,7 @@ miuix-navigation = { group = "top.yukonga.miuix.kmp", name = "miuix-nav-android"
 # okhttp
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp" }
 okhttp-bom = { module = "com.squareup.okhttp3:okhttp-bom", version.ref = "okhttp" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver" }
 
 # MonetCompat
 # https://github.com/KieronQuinn/MonetCompat
