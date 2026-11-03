@@ -1078,6 +1078,7 @@
     <string name="virustotal_scan_suspicious_warning">Some engines flagged this file. Review the report before installing.</string>
     <string name="virustotal_scan_file_too_large">This file is too large to upload. The maximum size is 650 MB.</string>
     <string name="virustotal_scan_file_unreadable">Couldn\'t read the file for scanning.</string>
+    <string name="virustotal_scan_upload_rejected">VirusTotal rejected the upload. Try uploading again to get a fresh upload URL.</string>
     <string name="virustotal_scan_invalid_key">The VirusTotal API key is invalid.</string>
     <string name="virustotal_scan_network_error">Couldn\'t reach VirusTotal. Check your connection and try again.</string>
     <string name="virustotal_scan_not_found">VirusTotal has no report for this file yet. You can upload it for scanning.</string>

@@ -25,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -44,8 +45,9 @@ import okio.BufferedSink
 import timber.log.Timber
 
 /**
- * VirusTotal API v3 client. The API key is never logged and is sent only to the API, never to a
- * single-use upload URL. Files are streamed with a bounded buffer, including large uploads.
+ * VirusTotal API v3 client. The API key is never logged and is sent only to VirusTotal API hosts
+ * and validated single-use VirusTotal upload URLs. Upload redirects are disabled so the key cannot
+ * be forwarded to another host. Files are streamed with a bounded buffer, including large uploads.
  *
  * [baseUrl] and [pollIntervalMs] are constructor seams for local protocol tests; production uses
  * the HTTPS VirusTotal API through Koin's default arguments.
@@ -167,23 +169,43 @@ class VirusTotalScannerImpl(
             .setType(MultipartBody.FORM)
             .addFormDataPart("file", fileName, uploadBody)
             .build()
-        val uploadRequest = Request.Builder().url(uploadUrl).apply {
-            if (!VirusTotalUploadPolicy.requiresUploadUrl(size)) header(API_KEY_HEADER, apiKey)
-        }.post(multipart).build()
-        val uploadResponse = executeBody(uploadRequest, "while uploading", VirusTotalErrorKind.INVALID_API_KEY, httpClient = uploadClient)
+        // VirusTotal's own client sends the session API key to the special upload URL as well.
+        // The URL has already been validated as a VirusTotal host, and uploadClient never follows
+        // redirects, so the key cannot leak to a redirect destination.
+        val uploadRequest = Request.Builder()
+            .url(uploadUrl)
+            .header(API_KEY_HEADER, apiKey)
+            .post(multipart)
+            .build()
+        val presignedUpload = VirusTotalUploadPolicy.requiresUploadUrl(size)
+        val uploadResponse = executeBody(
+            request = uploadRequest,
+            operation = "while uploading",
+            authorizationError = if (presignedUpload) VirusTotalErrorKind.UPLOAD_REJECTED else VirusTotalErrorKind.INVALID_API_KEY,
+            authorizationMessage = if (presignedUpload) {
+                "VirusTotal rejected the upload URL. Try uploading again."
+            } else {
+                "VirusTotal denied this request. Check the API key and its permissions."
+            },
+            httpClient = uploadClient,
+        )
         val analysisId = decode<VtAnalysisResponse>(uploadResponse).data?.id
             ?: throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal did not return an analysis id.")
         val analysisSha256 = uploadSha256
             ?: throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "The file upload did not complete.")
 
-        val deadline = System.currentTimeMillis() + MAX_ANALYSIS_WAIT_MS
-        while (System.currentTimeMillis() < deadline) {
+        // VirusTotal can keep an analysis queued well past two minutes, and may deduplicate an
+        // uploaded file into an existing canonical report. Keep polling while the scan coroutine is
+        // active; per-request HTTP timeouts and coroutine cancellation still bound failures/exit.
+        var checkedPendingFileReport = false
+        while (currentCoroutineContext().isActive) {
             delay(pollIntervalMs)
             currentCoroutineContext().ensureActive()
             val body = apiGet(apiKey, "/analyses/$analysisId", "while polling")
             val attributes = decode<VtAnalysisResponse>(body).data?.attributes
             when (attributes?.status) {
                 "completed" -> {
+                    completedUploadFileReport(apiKey, analysisSha256, fileName, size, analysisId)?.let { return@withContext it }
                     val stats = attributes.stats ?: throw VirusTotalException(
                         VirusTotalErrorKind.UNKNOWN,
                         "VirusTotal completed the analysis without statistics.",
@@ -201,10 +223,15 @@ class VirusTotalScannerImpl(
 
                 "failed" -> throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal failed to analyze this file.")
 
-                else -> Unit
+                else -> {
+                    if (!checkedPendingFileReport) {
+                        checkedPendingFileReport = true
+                        completedUploadFileReport(apiKey, analysisSha256, fileName, size, analysisId)?.let { return@withContext it }
+                    }
+                }
             }
         }
-        throw VirusTotalException(VirusTotalErrorKind.TIMEOUT, "The VirusTotal analysis did not finish in time.")
+        throw CancellationException("VirusTotal scan cancelled")
     }
 
     override suspend fun getCommunityScores(apiKey: String, sha256: String): VirusTotalCommunityScores = withContext(Dispatchers.IO) {
@@ -250,6 +277,7 @@ class VirusTotalScannerImpl(
         operation: String,
         authorizationError: VirusTotalErrorKind,
         notFoundMessage: String = "The VirusTotal resource could not be found.",
+        authorizationMessage: String = "VirusTotal denied this request. Check the API key and its permissions.",
         httpClient: OkHttpClient = client,
     ): String = try {
         httpClient.await(request).use { response ->
@@ -258,10 +286,7 @@ class VirusTotalScannerImpl(
                     throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal returned an empty response.")
                 }
 
-                HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(
-                    authorizationError,
-                    "VirusTotal denied this request. Check the API key and its permissions.",
-                )
+                HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(authorizationError, authorizationMessage)
 
                 HTTP_NOT_FOUND -> throw VirusTotalException(VirusTotalErrorKind.NOT_FOUND, notFoundMessage)
 
@@ -284,6 +309,32 @@ class VirusTotalScannerImpl(
         currentCoroutineContext().ensureActive()
         Timber.w(error, "VirusTotal request failed")
         throw VirusTotalException(VirusTotalErrorKind.NETWORK_ERROR, "Could not reach VirusTotal.")
+    }
+
+    /**
+     * The canonical file report carries the full engine results and community totals. A missing or
+     * still-empty file report is not a completed scan; auth/quota/network failures are propagated.
+     */
+    private suspend fun completedUploadFileReport(
+        apiKey: String,
+        sha256: String,
+        fileName: String,
+        fileSize: Long,
+        analysisId: String,
+    ): VirusTotalReport? {
+        val report = try {
+            lookupByHash(apiKey, sha256)
+        } catch (error: VirusTotalException) {
+            if (error.kind == VirusTotalErrorKind.NOT_FOUND) return null
+            throw error
+        }
+        if (report.total <= 0) return null
+        return report.copy(
+            method = VirusTotalScanMethod.UPLOAD,
+            analysisId = analysisId,
+            fileName = report.fileName ?: fileName,
+            fileSize = report.fileSize ?: fileSize,
+        )
     }
 
     private fun validateUploadUrl(value: String?): String {
@@ -359,8 +410,7 @@ class VirusTotalScannerImpl(
         const val GUI_BASE_URL = "https://www.virustotal.com/gui"
         const val API_KEY_HEADER = "x-apikey"
         const val UPLOAD_BUFFER_SIZE = 64 * 1024
-        const val POLL_INTERVAL_MS = 3_000L
-        const val MAX_ANALYSIS_WAIT_MS = 120_000L
+        const val POLL_INTERVAL_MS = 20_000L
         const val HTTP_OK = 200
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_FORBIDDEN = 403

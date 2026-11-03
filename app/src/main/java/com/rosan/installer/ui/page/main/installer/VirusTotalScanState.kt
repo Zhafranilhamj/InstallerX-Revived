@@ -42,6 +42,14 @@ data class VirusTotalScanState(
         get() = status == VirusTotalScanStatus.SCANNING
 
     /**
+     * Scanning, completed reports, and failures open the inline details automatically so engine
+     * counts, detection names, and the original caution messages are not hidden behind the arrow.
+     * The user can still collapse the card afterwards.
+     */
+    val shouldAutoExpandDetails: Boolean
+        get() = isScanning || status == VirusTotalScanStatus.COMPLETED || status == VirusTotalScanStatus.FAILED
+
+    /**
      * Strict mode treats the VirusTotal upload scan as a gate: installation waits for the scan to
      * finish and is refused while the report is a real malicious verdict.
      */

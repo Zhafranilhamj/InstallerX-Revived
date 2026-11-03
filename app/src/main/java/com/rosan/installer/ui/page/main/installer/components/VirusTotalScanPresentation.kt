@@ -16,8 +16,19 @@ import com.rosan.installer.domain.virustotal.model.VirusTotalVerdict
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanState
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanStatus
 
-/** How many engine detections are listed before the rest are collapsed into a counter. */
-internal const val MAX_LISTED_DETECTIONS = 5
+/**
+ * The original caution strings are part of the safety contract. Only the false-positive heading
+ * is relabelled as Suspicious; these resource ids must keep pointing at the unchanged warnings.
+ */
+internal fun VirusTotalVerdict.warningStringRes(): Int? = when (this) {
+    VirusTotalVerdict.MALICIOUS -> R.string.virustotal_scan_malicious_warning
+    VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> R.string.virustotal_false_positive_warning
+    VirusTotalVerdict.SUSPICIOUS -> R.string.virustotal_scan_suspicious_warning
+    VirusTotalVerdict.CLEAN, VirusTotalVerdict.NOT_FOUND -> null
+}
+
+internal fun VirusTotalVerdict.strictNoteStringRes(): Int? =
+    if (this == VirusTotalVerdict.LIKELY_FALSE_POSITIVE) R.string.virustotal_false_positive_strict_note else null
 
 /** Amber remains a caution state; only the false-positive heading is relabelled as suspicious. */
 fun virusTotalFalsePositiveColor(onSurface: Color): Color = if (onSurface.luminance() < 0.5f) Color(0xFFFFC857) else Color(0xFF9A6B00)
@@ -90,6 +101,7 @@ internal fun VirusTotalErrorKind.messageForDisplay(): String = stringResource(
         VirusTotalErrorKind.NETWORK_ERROR -> R.string.virustotal_scan_network_error
         VirusTotalErrorKind.FILE_TOO_LARGE -> R.string.virustotal_scan_file_too_large
         VirusTotalErrorKind.FILE_UNREADABLE -> R.string.virustotal_scan_file_unreadable
+        VirusTotalErrorKind.UPLOAD_REJECTED -> R.string.virustotal_scan_upload_rejected
         VirusTotalErrorKind.NOT_FOUND -> R.string.virustotal_scan_not_found
         VirusTotalErrorKind.QUOTA_EXCEEDED -> R.string.virustotal_scan_quota_exceeded
         VirusTotalErrorKind.TIMEOUT -> R.string.virustotal_scan_timeout

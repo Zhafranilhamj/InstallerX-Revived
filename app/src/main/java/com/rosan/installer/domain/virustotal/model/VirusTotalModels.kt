@@ -158,6 +158,7 @@ enum class VirusTotalErrorKind {
     NETWORK_ERROR,
     FILE_TOO_LARGE,
     FILE_UNREADABLE,
+    UPLOAD_REJECTED,
     NOT_FOUND,
     QUOTA_EXCEEDED,
     TIMEOUT,

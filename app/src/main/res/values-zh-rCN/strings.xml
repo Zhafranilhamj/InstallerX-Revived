@@ -1058,6 +1058,7 @@
     <string name="virustotal_scan_suspicious_warning">部分引擎将此文件标记为可疑。安装前请查看报告。</string>
     <string name="virustotal_scan_file_too_large">文件过大，无法上传。最大支持 650 MB。</string>
     <string name="virustotal_scan_file_unreadable">无法读取文件进行扫描。</string>
+    <string name="virustotal_scan_upload_rejected">VirusTotal 拒绝了上传。请重新上传以获取新的上传地址。</string>
     <string name="virustotal_scan_invalid_key">VirusTotal API 密钥无效。</string>
     <string name="virustotal_scan_network_error">无法连接到 VirusTotal。请检查网络连接后重试。</string>
     <string name="virustotal_scan_not_found">VirusTotal 尚无此文件的报告。你可以上传文件进行扫描。</string>

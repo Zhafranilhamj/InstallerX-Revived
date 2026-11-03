@@ -56,6 +56,15 @@ class VirusTotalScanStateTest {
     }
 
     @Test
+    fun `scanning results and failures auto-expand details while idle stays compact`() {
+        val idle = state().copy(status = VirusTotalScanStatus.IDLE, report = null)
+        assertFalse(idle.shouldAutoExpandDetails)
+        assertTrue(state().copy(status = VirusTotalScanStatus.SCANNING).shouldAutoExpandDetails)
+        assertTrue(state().shouldAutoExpandDetails)
+        assertTrue(state().copy(status = VirusTotalScanStatus.FAILED, report = null).shouldAutoExpandDetails)
+    }
+
+    @Test
     fun `community loading does not block installation after a strict scan`() {
         val completed = state(mode = VirusTotalScanMode.STRICT).copy(isCommunityLoading = true)
         assertFalse(completed.blocksInstallation)

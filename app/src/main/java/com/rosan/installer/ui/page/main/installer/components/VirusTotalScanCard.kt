@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -62,7 +63,7 @@ import com.rosan.installer.ui.page.main.installer.VirusTotalScanState
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanStatus
 import com.rosan.installer.ui.util.formatSize
 
-/** Compact idle status plus two independent action cards. Scanning expands the status automatically. */
+/** Compact idle status plus two independent action cards. Scanning and results expand inline. */
 @Composable
 fun VirusTotalScanCard(
     state: VirusTotalScanState,
@@ -76,7 +77,10 @@ fun VirusTotalScanCard(
     val uriHandler = LocalUriHandler.current
     val isStrict = state.isStrict
     val canScan = state.hasUsableApiKey && state.networkEnabled && !state.isScanning
-    var expanded by rememberSaveable(state.packageName, state.report?.sha256, state.status) { mutableStateOf(false) }
+    var expanded by rememberSaveable(state.packageName, state.report?.sha256) { mutableStateOf(false) }
+    LaunchedEffect(state.status, state.packageName, state.report?.sha256, state.error?.kind) {
+        if (state.shouldAutoExpandDetails) expanded = true
+    }
     val showDetails = state.isScanning || expanded
     val expandDescription = stringResource(
         if (showDetails) R.string.virustotal_collapse_details else R.string.virustotal_expand_details,
@@ -90,35 +94,95 @@ fun VirusTotalScanCard(
             onClick = { if (!state.isScanning) expanded = !expanded },
             modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).semantics { contentDescription = expandDescription },
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            color = if (state.isLikelyFalsePositive) {
+                virusTotalFalsePositiveCardColor(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.surface)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            },
         ) {
-            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = state.report?.verdict?.icon() ?: Icons.Default.Security,
-                    contentDescription = null,
-                    tint = state.report?.verdict?.color() ?: MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.size(10.dp))
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(stringResource(R.string.virustotal_scan_status_title), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        text = state.compactStatus(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (state.isBlockedByMalware) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (state.isBlockedByMalware || (isStrict && state.status == VirusTotalScanStatus.FAILED)) Int.MAX_VALUE else 2,
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = state.report?.verdict?.icon() ?: Icons.Default.Security,
+                        contentDescription = null,
+                        tint = state.report?.verdict?.color() ?: MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
                     )
+                    Spacer(Modifier.size(10.dp))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(stringResource(R.string.virustotal_scan_status_title), style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            text = state.compactStatus(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (state.isBlockedByMalware) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        text = stringResource(if (isStrict) R.string.virustotal_scan_mode_strict else R.string.virustotal_scan_mode_normal),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (state.isScanning) {
+                        CircularProgressIndicator(modifier = Modifier.padding(start = 8.dp).size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            imageVector = if (showDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
                 }
-                Spacer(Modifier.size(8.dp))
-                Text(
-                    text = stringResource(if (isStrict) R.string.virustotal_scan_mode_strict else R.string.virustotal_scan_mode_normal),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                if (state.isScanning) {
-                    CircularProgressIndicator(modifier = Modifier.padding(start = 8.dp).size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(if (showDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
+
+                AnimatedVisibility(visible = showDetails) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!state.networkEnabled) {
+                            Text(stringResource(R.string.virustotal_network_disabled), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        } else if (!state.hasApiKey) {
+                            Text(stringResource(R.string.virustotal_no_api_key), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        } else if (!state.hasUsableApiKey) {
+                            Text(stringResource(R.string.virustotal_scan_invalid_key), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        if (state.status == VirusTotalScanStatus.IDLE) {
+                            Text(
+                                text = stringResource(if (isStrict) R.string.virustotal_strict_scan_required else R.string.virustotal_scan_optional_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        state.report?.let { report ->
+                            VirusTotalReportView(
+                                report = report,
+                                state = state,
+                                onOpenReport = { runCatching { uriHandler.openUri(it) } },
+                                onVote = onVote,
+                                onRetryCommunity = onRetryCommunity,
+                            )
+                        }
+                        state.error?.let { error ->
+                            val alreadyExplained = (error.kind == VirusTotalErrorKind.NO_API_KEY && !state.hasApiKey) ||
+                                (error.kind == VirusTotalErrorKind.NETWORK_ERROR && !state.networkEnabled)
+                            if (!alreadyExplained) {
+                                Text(error.kind.messageForDisplay(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        if (isStrict && state.status == VirusTotalScanStatus.COMPLETED) {
+                            Text(
+                                text = stringResource(if (state.isBlockedByMalware) R.string.virustotal_strict_scan_blocked else R.string.virustotal_strict_scan_complete),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (state.isBlockedByMalware) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        if (isStrict && state.status == VirusTotalScanStatus.FAILED) {
+                            Text(
+                                text = stringResource(R.string.virustotal_scan_install_with_caution),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -141,67 +205,6 @@ fun VirusTotalScanCard(
                 )
             }
         }
-
-        AnimatedVisibility(visible = showDetails) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = if (state.isLikelyFalsePositive) {
-                    virusTotalFalsePositiveCardColor(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.surface)
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                },
-            ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (!state.networkEnabled) {
-                        Text(stringResource(R.string.virustotal_network_disabled), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    } else if (!state.hasApiKey) {
-                        Text(stringResource(R.string.virustotal_no_api_key), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    } else if (!state.hasUsableApiKey) {
-                        Text(stringResource(R.string.virustotal_scan_invalid_key), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    }
-                    if (state.status == VirusTotalScanStatus.IDLE) {
-                        Text(
-                            text = stringResource(if (isStrict) R.string.virustotal_strict_scan_required else R.string.virustotal_scan_optional_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    state.report?.let { report ->
-                        VirusTotalReportView(
-                            report = report,
-                            state = state,
-                            onOpenReport = { runCatching { uriHandler.openUri(it) } },
-                            onVote = onVote,
-                            onRetryCommunity = onRetryCommunity,
-                        )
-                    }
-                    state.error?.let { error ->
-                        val alreadyExplained = (error.kind == VirusTotalErrorKind.NO_API_KEY && !state.hasApiKey) ||
-                            (error.kind == VirusTotalErrorKind.NETWORK_ERROR && !state.networkEnabled)
-                        if (!alreadyExplained) {
-                            Text(error.kind.messageForDisplay(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    if (isStrict && state.status == VirusTotalScanStatus.COMPLETED) {
-                        Text(
-                            text = stringResource(if (state.isBlockedByMalware) R.string.virustotal_strict_scan_blocked else R.string.virustotal_strict_scan_complete),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (state.isBlockedByMalware) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    if (isStrict && state.status == VirusTotalScanStatus.FAILED) {
-                        Text(
-                            text = stringResource(R.string.virustotal_scan_install_with_caution),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -221,7 +224,7 @@ private fun VirusTotalActionCard(text: String, icon: ImageVector, enabled: Boole
             verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
         ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 2, textAlign = TextAlign.Center)
+            Text(text, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
         }
     }
 }
@@ -243,11 +246,9 @@ private fun VirusTotalReportView(
         Text(report.detectionSummary(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (report.detections.isNotEmpty()) {
             Text(stringResource(R.string.virustotal_detections_title), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            report.detections.take(MAX_LISTED_DETECTIONS).forEach {
+            report.detections.forEach {
                 Text(it.displayText(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            val remaining = report.detections.size - MAX_LISTED_DETECTIONS
-            if (remaining > 0) Text(stringResource(R.string.virustotal_more_detections, remaining), style = MaterialTheme.typography.labelSmall)
         }
         VirusTotalVerdictWarning(report, state.isStrict)
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -276,36 +277,17 @@ private fun VirusTotalReportView(
 
 @Composable
 private fun VirusTotalVerdictWarning(report: VirusTotalReport, strictMode: Boolean) {
-    when (report.verdict) {
-        VirusTotalVerdict.MALICIOUS -> Text(
-            stringResource(R.string.virustotal_scan_malicious_warning),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
-
-        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> {
-            // Keep the original caution message unchanged; only its heading is called Suspicious.
-            Text(
-                stringResource(R.string.virustotal_false_positive_warning),
-                style = MaterialTheme.typography.bodySmall,
-                color = virusTotalFalsePositiveColor(MaterialTheme.colorScheme.surface),
-            )
-            if (strictMode) {
-                Text(
-                    stringResource(R.string.virustotal_false_positive_strict_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        VirusTotalVerdict.SUSPICIOUS -> Text(
-            stringResource(R.string.virustotal_scan_suspicious_warning),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.tertiary,
-        )
-
-        VirusTotalVerdict.CLEAN, VirusTotalVerdict.NOT_FOUND -> Unit
+    val warningRes = report.verdict.warningStringRes() ?: return
+    val warningColor = when (report.verdict) {
+        VirusTotalVerdict.MALICIOUS -> MaterialTheme.colorScheme.error
+        VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> virusTotalFalsePositiveColor(MaterialTheme.colorScheme.surface)
+        VirusTotalVerdict.SUSPICIOUS -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(stringResource(warningRes), style = MaterialTheme.typography.bodySmall, color = warningColor)
+    val strictNoteRes = report.verdict.strictNoteStringRes()
+    if (strictMode && strictNoteRes != null) {
+        Text(stringResource(strictNoteRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

@@ -20,7 +20,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -29,6 +28,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
+import okhttp3.Headers.Companion.headersOf
 import okhttp3.OkHttpClient
 
 class VirusTotalScannerProtocolTest {
@@ -56,7 +56,10 @@ class VirusTotalScannerProtocolTest {
     fun `small files use the standard endpoint and stream a stable hash`() = runTest {
         val file = tempFile().apply { writeText("small apk payload") }
         try {
-            enqueueAnalysis()
+            val hash = sha256(file)
+            enqueueUploadAccepted()
+            enqueueAnalysisCompleted()
+            enqueueFileReport(hash)
             val report = scanner.uploadAndScan(KEY, DataEntity.FileEntity(file.path), "small.apk")
             val upload = takeRequest()
             assertEquals("POST", upload.method)
@@ -64,7 +67,8 @@ class VirusTotalScannerProtocolTest {
             assertEquals(KEY, upload.headers["x-apikey"])
             assertTrue(upload.body!!.utf8().contains("small apk payload"))
             assertEquals("/api/v3/analyses/analysis-1", takeRequest().url.encodedPath)
-            assertEquals(sha256(file), report.sha256)
+            assertEquals("/api/v3/files/$hash", takeRequest().url.encodedPath)
+            assertEquals(hash, report.sha256)
             assertEquals(VirusTotalScanMethod.UPLOAD, report.method)
             assertEquals(VirusTotalVerdict.CLEAN, report.verdict)
         } finally {
@@ -73,13 +77,16 @@ class VirusTotalScannerProtocolTest {
     }
 
     @Test
-    fun `files above 32 MB first request a single-use URL without forwarding the API key`() = runTest {
+    fun `files above 32 MB send the API key only to the trusted single-use URL`() = runTest {
         val size = VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1
         val file = tempFile()
         RandomAccessFile(file, "rw").use { it.setLength(size) }
         try {
+            val hash = sha256(file)
             server.enqueue(MockResponse(body = """{"data":"${server.url("/_ah/upload/single-use")}"}"""))
-            enqueueAnalysis()
+            enqueueUploadAccepted()
+            enqueueAnalysisCompleted()
+            enqueueFileReport(hash)
             val report = scanner.uploadAndScan(KEY, DataEntity.FileEntity(file.path), "large.apk")
             val urlRequest = takeRequest()
             assertEquals("GET", urlRequest.method)
@@ -88,10 +95,11 @@ class VirusTotalScannerProtocolTest {
             val upload = takeRequest()
             assertEquals("POST", upload.method)
             assertEquals("/_ah/upload/single-use", upload.url.encodedPath)
-            assertNull(upload.headers["x-apikey"])
+            assertEquals(KEY, upload.headers["x-apikey"])
             assertTrue(upload.bodySize > size)
             assertEquals("/api/v3/analyses/analysis-1", takeRequest().url.encodedPath)
-            assertEquals(sha256(file), report.sha256)
+            assertEquals("/api/v3/files/$hash", takeRequest().url.encodedPath)
+            assertEquals(hash, report.sha256)
             assertEquals(size, report.fileSize)
         } finally {
             file.delete()
@@ -134,12 +142,103 @@ class VirusTotalScannerProtocolTest {
     }
 
     @Test
+    fun `a rejected single-use upload is not reported as an invalid API key`() = runTest {
+        val file = tempFile().apply { writeText("private payload") }
+        val source = object : DataEntity.FileEntity(file.path) {
+            override fun getSize(): Long = VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1
+        }
+        try {
+            server.enqueue(MockResponse(body = """{"data":"${server.url("/_ah/upload/single-use")}"}"""))
+            server.enqueue(MockResponse(code = 403, body = "{}"))
+            val error = assertFailsWith<VirusTotalException> { scanner.uploadAndScan(KEY, source, "file.apk") }
+            assertEquals(VirusTotalErrorKind.UPLOAD_REJECTED, error.kind)
+            assertEquals(2, server.requestCount)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `single-use upload redirects are not followed with the API key`() = runTest {
+        val file = tempFile().apply { writeText("private payload") }
+        val source = object : DataEntity.FileEntity(file.path) {
+            override fun getSize(): Long = VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1
+        }
+        try {
+            server.enqueue(MockResponse(body = """{"data":"${server.url("/_ah/upload/single-use")}"}"""))
+            server.enqueue(MockResponse(code = 302, headers = headersOf("Location", "https://untrusted.invalid/steal"), body = ""))
+            assertFailsWith<VirusTotalException> { scanner.uploadAndScan(KEY, source, "file.apk") }
+            assertEquals(2, server.requestCount)
+            assertEquals("/api/v3/files/upload_url", takeRequest().url.encodedPath)
+            val upload = takeRequest()
+            assertEquals("/_ah/upload/single-use", upload.url.encodedPath)
+            assertEquals(KEY, upload.headers["x-apikey"])
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `queued uploads can finish from the canonical file report instead of timing out`() = runTest {
+        val file = tempFile().apply { writeText("already known payload") }
+        try {
+            val hash = sha256(file)
+            enqueueUploadAccepted()
+            enqueueAnalysisQueued()
+            enqueueFileReport(hash)
+            val report = scanner.uploadAndScan(KEY, DataEntity.FileEntity(file.path), "known.apk")
+            assertEquals(VirusTotalScanMethod.UPLOAD, report.method)
+            assertEquals("analysis-1", report.analysisId)
+            assertEquals(hash, report.sha256)
+            assertEquals(3, server.requestCount)
+            assertEquals("/api/v3/files/$hash", takeRequest().url.encodedPath)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `new files keep polling after an empty canonical report until the analysis completes`() = runTest {
+        val file = tempFile().apply { writeText("new payload") }
+        try {
+            val hash = sha256(file)
+            enqueueUploadAccepted()
+            enqueueAnalysisQueued()
+            server.enqueue(MockResponse(code = 404, body = "{}"))
+            enqueueAnalysisCompleted()
+            enqueueFileReport(hash)
+            val report = scanner.uploadAndScan(KEY, DataEntity.FileEntity(file.path), "new.apk")
+            assertEquals(VirusTotalVerdict.CLEAN, report.verdict)
+            assertEquals(5, server.requestCount)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `completed uploads restore engine names and community totals from the file report`() = runTest {
+        val file = tempFile().apply { writeText("flagged payload") }
+        try {
+            val hash = sha256(file)
+            enqueueUploadAccepted()
+            enqueueAnalysisCompleted()
+            enqueueFileReport(hash, detected = true)
+            val report = scanner.uploadAndScan(KEY, DataEntity.FileEntity(file.path), "flagged.apk")
+            assertEquals(1, report.positives)
+            assertEquals(70, report.total)
+            assertEquals("Example Engine", report.detections.single().engine)
+            assertEquals("Android.Generic.Heuristic", report.detections.single().name)
+            assertEquals(7, report.communityScores?.harmless)
+            assertEquals(2, report.communityScores?.malicious)
+            assertEquals(VirusTotalVerdict.LIKELY_FALSE_POSITIVE, report.verdict)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun `hash lookup preserves detection names and reads real community totals`() = runTest {
-        server.enqueue(
-            MockResponse(
-                body = """{"data":{"attributes":{"sha256":"$HASH","last_analysis_stats":{"malicious":1,"harmless":69},"last_analysis_results":{"engine":{"category":"malicious","engine_name":"Example Engine","result":"Android.Generic.Heuristic"}},"total_votes":{"harmless":7,"malicious":2},"reputation":5}}}""",
-            ),
-        )
+        enqueueFileReport(HASH, detected = true)
         val report = scanner.lookupByHash(KEY, HASH)
         assertEquals(VirusTotalVerdict.LIKELY_FALSE_POSITIVE, report.verdict)
         assertEquals("Example Engine", report.detections.single().engine)
@@ -178,9 +277,32 @@ class VirusTotalScannerProtocolTest {
         assertEquals(-2, scores.reputation)
     }
 
-    private fun enqueueAnalysis() {
+    private fun enqueueUploadAccepted() {
         server.enqueue(MockResponse(body = """{"data":{"id":"analysis-1","type":"analysis"}}"""))
-        server.enqueue(MockResponse(body = """{"data":{"id":"analysis-1","attributes":{"status":"completed","stats":{"harmless":70},"results":{}}}}"""))
+    }
+
+    private fun enqueueAnalysisQueued() {
+        server.enqueue(MockResponse(body = """{"data":{"id":"analysis-1","attributes":{"status":"queued"}}}"""))
+    }
+
+    private fun enqueueAnalysisCompleted() {
+        server.enqueue(
+            MockResponse(body = """{"data":{"id":"analysis-1","attributes":{"status":"completed","stats":{"harmless":70},"results":{}}}}"""),
+        )
+    }
+
+    private fun enqueueFileReport(hash: String, detected: Boolean = false) {
+        val stats = if (detected) """{"malicious":1,"harmless":69}""" else """{"harmless":70}"""
+        val results = if (detected) {
+            """"last_analysis_results":{"engine":{"category":"malicious","engine_name":"Example Engine","result":"Android.Generic.Heuristic"}},"""
+        } else {
+            ""
+        }
+        server.enqueue(
+            MockResponse(
+                body = """{"data":{"attributes":{"sha256":"$hash","last_analysis_stats":$stats,$results"total_votes":{"harmless":7,"malicious":2},"reputation":5}}}""",
+            ),
+        )
     }
 
     private fun takeRequest(): RecordedRequest = assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
