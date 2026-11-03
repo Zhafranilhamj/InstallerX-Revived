@@ -30,7 +30,7 @@ class LocalHttpServerTest {
             onError = {},
         )
         server.start()
-        val client = OkHttpClient()
+        val client = OkHttpClient.Builder().followRedirects(false).build()
         try {
             val base = "http://127.0.0.1:$port"
             client.newCall(Request.Builder().url("$base/").build()).execute().use { response ->
@@ -92,7 +92,7 @@ class LocalHttpServerTest {
         val server = LocalHttpServer(port, "", directory, "test", {}, {})
         server.start()
         try {
-            OkHttpClient().newCall(
+            OkHttpClient.Builder().followRedirects(false).build().newCall(
                 Request.Builder().url("http://127.0.0.1:$port/api/status").build(),
             ).execute().use { response ->
                 assertEquals(200, response.code)
