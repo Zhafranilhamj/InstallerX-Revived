@@ -143,10 +143,9 @@ class VirusTotalScannerProtocolTest {
 
     @Test
     fun `a rejected single-use upload is not reported as an invalid API key`() = runTest {
-        val file = tempFile().apply { writeText("private payload") }
-        val source = object : DataEntity.FileEntity(file.path) {
-            override fun getSize(): Long = VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1
-        }
+        val file = tempFile()
+        RandomAccessFile(file, "rw").use { it.setLength(VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1) }
+        val source = DataEntity.FileEntity(file.path)
         try {
             server.enqueue(MockResponse(body = """{"data":"${server.url("/_ah/upload/single-use")}"}"""))
             server.enqueue(MockResponse(code = 403, body = "{}"))
@@ -160,10 +159,9 @@ class VirusTotalScannerProtocolTest {
 
     @Test
     fun `single-use upload redirects are not followed with the API key`() = runTest {
-        val file = tempFile().apply { writeText("private payload") }
-        val source = object : DataEntity.FileEntity(file.path) {
-            override fun getSize(): Long = VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1
-        }
+        val file = tempFile()
+        RandomAccessFile(file, "rw").use { it.setLength(VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1) }
+        val source = DataEntity.FileEntity(file.path)
         try {
             server.enqueue(MockResponse(body = """{"data":"${server.url("/_ah/upload/single-use")}"}"""))
             server.enqueue(MockResponse(code = 302, headers = headersOf("Location", "https://untrusted.invalid/steal"), body = ""))
@@ -191,6 +189,8 @@ class VirusTotalScannerProtocolTest {
             assertEquals("analysis-1", report.analysisId)
             assertEquals(hash, report.sha256)
             assertEquals(3, server.requestCount)
+            assertEquals("/api/v3/files", takeRequest().url.encodedPath)
+            assertEquals("/api/v3/analyses/analysis-1", takeRequest().url.encodedPath)
             assertEquals("/api/v3/files/$hash", takeRequest().url.encodedPath)
         } finally {
             file.delete()

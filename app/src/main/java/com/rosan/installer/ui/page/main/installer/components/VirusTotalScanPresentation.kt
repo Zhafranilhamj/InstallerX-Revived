@@ -27,8 +27,7 @@ internal fun VirusTotalVerdict.warningStringRes(): Int? = when (this) {
     VirusTotalVerdict.CLEAN, VirusTotalVerdict.NOT_FOUND -> null
 }
 
-internal fun VirusTotalVerdict.strictNoteStringRes(): Int? =
-    if (this == VirusTotalVerdict.LIKELY_FALSE_POSITIVE) R.string.virustotal_false_positive_strict_note else null
+internal fun VirusTotalVerdict.strictNoteStringRes(): Int? = if (this == VirusTotalVerdict.LIKELY_FALSE_POSITIVE) R.string.virustotal_false_positive_strict_note else null
 
 /** Amber remains a caution state; only the false-positive heading is relabelled as suspicious. */
 fun virusTotalFalsePositiveColor(onSurface: Color): Color = if (onSurface.luminance() < 0.5f) Color(0xFFFFC857) else Color(0xFF9A6B00)

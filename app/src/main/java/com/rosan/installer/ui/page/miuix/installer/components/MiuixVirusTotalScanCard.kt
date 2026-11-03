@@ -59,8 +59,8 @@ import com.rosan.installer.ui.page.main.installer.components.detectionSummary
 import com.rosan.installer.ui.page.main.installer.components.displayLabel
 import com.rosan.installer.ui.page.main.installer.components.displayText
 import com.rosan.installer.ui.page.main.installer.components.messageForDisplay
-import com.rosan.installer.ui.page.main.installer.components.virusTotalFalsePositiveCardColor
 import com.rosan.installer.ui.page.main.installer.components.strictNoteStringRes
+import com.rosan.installer.ui.page.main.installer.components.virusTotalFalsePositiveCardColor
 import com.rosan.installer.ui.page.main.installer.components.virusTotalFalsePositiveColor
 import com.rosan.installer.ui.page.main.installer.components.warningStringRes
 import com.rosan.installer.ui.theme.miuixSheetCardColor
