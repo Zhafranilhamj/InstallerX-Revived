@@ -70,13 +70,43 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Check code formatting
+        id: format
+        continue-on-error: true
         run: ./gradlew spotlessCheck --no-configuration-cache
 
+      - name: Capture formatter patch for the agent
+        if: steps.format.outcome == 'failure'
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew spotlessApply --no-configuration-cache
+          git diff --binary > /tmp/spotless.patch
+          split -b 45000 -d /tmp/spotless.patch /tmp/spotless-patch-
+          for chunk in /tmp/spotless-patch-*; do
+            echo "::error title=ArenaFormatPatch-$(basename "$chunk")::$(base64 -w0 "$chunk")"
+          done
+
       - name: Run unit tests
+        id: tests
+        continue-on-error: true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew testUnstableDebugUnitTest --no-configuration-cache
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew testUnstableDebugUnitTest --no-configuration-cache 2>&1 | tee /tmp/unit-tests.log
+
+      - name: Capture test diagnostics for the agent
+        if: steps.tests.outcome == 'failure'
+        shell: bash
+        run: |
+          tail -n 2500 /tmp/unit-tests.log > /tmp/unit-tests-tail.log
+          split -b 45000 -d /tmp/unit-tests-tail.log /tmp/unit-tests-chunk-
+          for chunk in /tmp/unit-tests-chunk-*; do
+            echo "::error title=ArenaTestLog-$(basename "$chunk")::$(base64 -w0 "$chunk")"
+          done
+          exit 1
 
       - name: Build Unstable Debug APK
         env:
