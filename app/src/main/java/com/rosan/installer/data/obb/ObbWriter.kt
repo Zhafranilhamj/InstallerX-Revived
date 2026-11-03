@@ -10,8 +10,8 @@ import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import com.rosan.installer.domain.device.provider.DeviceCapabilityProvider
-import com.rosan.installer.domain.obb.model.ObbPayload
 import com.rosan.installer.domain.obb.model.ObbPathPolicy
+import com.rosan.installer.domain.obb.model.ObbPayload
 import com.rosan.installer.domain.obb.model.ObbWriteResult
 import com.rosan.installer.domain.obb.model.ObbWriteTier
 import com.rosan.installer.domain.settings.model.config.Authorizer

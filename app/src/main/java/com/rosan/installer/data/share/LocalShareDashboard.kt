@@ -53,5 +53,4 @@ drop.addEventListener('dragover',function(e){e.preventDefault()});
 drop.addEventListener('drop',function(e){e.preventDefault();upload(e.dataTransfer.files)});
 refresh();setInterval(refresh,5000);
 </script></body></html>"""
-
 }

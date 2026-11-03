@@ -249,11 +249,9 @@ class LocalHttpServer(
         }
     }
 
-    private fun respondHtml(output: OutputStream, code: Int, reason: String, html: String) =
-        respond(output, code, reason, "text/html; charset=utf-8", html.toByteArray(Charsets.UTF_8))
+    private fun respondHtml(output: OutputStream, code: Int, reason: String, html: String) = respond(output, code, reason, "text/html; charset=utf-8", html.toByteArray(Charsets.UTF_8))
 
-    private fun respondJson(output: OutputStream, json: String, code: Int = 200, reason: String = "OK") =
-        respond(output, code, reason, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
+    private fun respondJson(output: OutputStream, json: String, code: Int = 200, reason: String = "OK") = respond(output, code, reason, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
 
     private fun respond(
         output: OutputStream,

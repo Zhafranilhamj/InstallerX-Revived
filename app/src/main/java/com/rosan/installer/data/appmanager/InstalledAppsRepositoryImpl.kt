@@ -83,12 +83,11 @@ class InstalledAppsRepositoryImpl(
     }
 
     @Suppress("DEPRECATION")
-    private fun signingCertificates(info: PackageInfo): Array<out Signature> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info.signingInfo?.apkContentsSigners.orEmpty()
-        } else {
-            info.signatures.orEmpty()
-        }
+    private fun signingCertificates(info: PackageInfo): Array<out Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        info.signingInfo?.apkContentsSigners.orEmpty()
+    } else {
+        info.signatures.orEmpty()
+    }
 
     private fun sha256(signature: Signature): String = MessageDigest.getInstance("SHA-256")
         .digest(signature.toByteArray())

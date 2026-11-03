@@ -6,10 +6,10 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
 import com.rosan.installer.core.env.AppConfig
+import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.domain.share.model.LocalShareConfig
 import com.rosan.installer.domain.share.model.LocalShareEndpoint
 import com.rosan.installer.domain.share.model.LocalShareState
-import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.ui.activity.InstallerActivity
 import java.io.File
 import java.net.Inet4Address

@@ -9,10 +9,10 @@ import com.rosan.installer.domain.virustotal.model.isMandatoryScan
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanState
 import com.rosan.installer.ui.page.main.installer.VirusTotalScanStatus
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.assertEquals
 
 class VirusTotalAutoScanPolicyTest {
     @Test

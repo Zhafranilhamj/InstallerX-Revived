@@ -2,9 +2,9 @@
 // Copyright (C) 2026 InstallerX Revived contributors
 package com.rosan.installer.data.share
 
+import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.domain.share.model.LocalShareEndpoint
 import com.rosan.installer.domain.share.model.LocalShareProtocol
-import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit

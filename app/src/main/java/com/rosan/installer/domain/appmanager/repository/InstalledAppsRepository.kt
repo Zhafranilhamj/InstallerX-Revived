@@ -3,8 +3,8 @@
 package com.rosan.installer.domain.appmanager.repository
 
 import com.rosan.installer.domain.appmanager.model.InstalledAppDetails
-import kotlinx.coroutines.flow.StateFlow
 import com.rosan.installer.domain.appmanager.model.UninstallStatus
+import kotlinx.coroutines.flow.StateFlow
 
 interface InstalledAppsRepository {
     /** Detailed snapshot of installed user and system packages. */

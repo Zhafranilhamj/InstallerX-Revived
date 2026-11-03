@@ -19,8 +19,7 @@ object ObbPathPolicy {
     fun isValidPackageName(name: String): Boolean = PACKAGE_REGEX.matches(name)
 
     /** `main.42.com.example.game.obb` -> `com.example.game`. */
-    fun packageNameFromFileName(fileName: String): String? =
-        OBB_NAME_REGEX.matchEntire(fileName)?.groupValues?.get(1)?.takeIf(::isValidPackageName)
+    fun packageNameFromFileName(fileName: String): String? = OBB_NAME_REGEX.matchEntire(fileName)?.groupValues?.get(1)?.takeIf(::isValidPackageName)
 
     /** Rejects traversal, absolute paths and anything that is not a plain file name. */
     fun safeFileName(fileName: String): String? {

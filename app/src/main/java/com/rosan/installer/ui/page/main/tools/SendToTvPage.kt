@@ -110,7 +110,9 @@ fun SendToTvPage() {
                     val file = selectedFile
                     when {
                         endpoint == null -> resultText = context.getString(R.string.send_to_tv_invalid_address)
+
                         file == null -> resultText = context.getString(R.string.send_to_tv_no_file)
+
                         else -> scope.launch {
                             sending = true
                             val outcome = client.push(endpoint, file)

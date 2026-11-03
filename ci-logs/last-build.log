@@ -4,13 +4,13 @@ Configuration on demand is an incubating feature.
 > Task :build-plugins:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :build-plugins:generateExternalPluginSpecBuilders FROM-CACHE
 > Task :build-plugins:extractPrecompiledScriptPluginPlugins FROM-CACHE
-> Task :build-plugins:compilePluginsBlocks FROM-CACHE
-> Task :build-plugins:generatePrecompiledScriptPluginAccessors FROM-CACHE
 > Task :build-plugins:generateScriptPluginAdapters FROM-CACHE
-> Task :build-plugins:compileKotlin FROM-CACHE
-> Task :build-plugins:compileJava NO-SOURCE
 > Task :build-plugins:pluginDescriptors
 > Task :build-plugins:processResources
+> Task :build-plugins:compilePluginsBlocks
+> Task :build-plugins:generatePrecompiledScriptPluginAccessors FROM-CACHE
+> Task :build-plugins:compileKotlin
+> Task :build-plugins:compileJava NO-SOURCE
 > Task :build-plugins:classes
 > Task :build-plugins:jar
 
@@ -26,7 +26,7 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :spotlessKotlinGradle
 > Task :spotlessKotlinGradleApply
 > Task :spotlessApply
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793708168721.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793710163358.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
 
@@ -36,8 +36,8 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 32s
-13 actionable tasks: 7 executed, 6 from cache
+BUILD SUCCESSFUL in 1m 8s
+13 actionable tasks: 9 executed, 4 from cache
 SPOTLESS_EXIT=0
 ===== spotlessCheck =====
 Configuration on demand is an incubating feature.
@@ -61,12 +61,12 @@ Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradl
 No custom signing info. Debug build will use the default debug keystore.
 No custom signing info. Release build will use the default debug keystore.
 
-> Task :spotlessKotlin UP-TO-DATE
-> Task :spotlessKotlinCheck UP-TO-DATE
+> Task :spotlessKotlin
+> Task :spotlessKotlinCheck
 > Task :spotlessKotlinGradle UP-TO-DATE
 > Task :spotlessKotlinGradleCheck UP-TO-DATE
-> Task :spotlessCheck UP-TO-DATE
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793708199470.json
+> Task :spotlessCheck
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793710228160.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
 
@@ -77,7 +77,7 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
 BUILD SUCCESSFUL in 2s
-13 actionable tasks: 13 up-to-date
+13 actionable tasks: 2 executed, 11 up-to-date
 SPOTLESS_CHECK_EXIT=0
 ===== testUnstableDebugUnitTest + assembleUnstableDebug =====
 Configuration on demand is an incubating feature.
@@ -101,63 +101,63 @@ Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradl
 No custom signing info. Debug build will use the default debug keystore.
 No custom signing info. Release build will use the default debug keystore.
 
-> Task :hidden-api:preBuild UP-TO-DATE
 > Task :app-process:preBuild UP-TO-DATE
-> Task :hidden-api:preDebugBuild UP-TO-DATE
 > Task :app-process:preDebugBuild UP-TO-DATE
+> Task :hidden-api:preBuild UP-TO-DATE
+> Task :hidden-api:preDebugBuild UP-TO-DATE
 > Task :app:preBuild UP-TO-DATE
 > Task :app:preUnstableDebugBuild UP-TO-DATE
-> Task :hidden-api:generateDebugResources FROM-CACHE
+> Task :hidden-api:generateDebugResources
 > Task :app:generateUnstableDebugBuildConfig
-> Task :app-process:compileDebugAidl FROM-CACHE
-> Task :app-process:extractDebugSupportedLocales FROM-CACHE
+> Task :hidden-api:packageDebugResources
+> Task :hidden-api:processDebugNavigationResources
+> Task :app-process:extractDebugSupportedLocales
 > Task :app-process:processDebugNavigationResources FROM-CACHE
 > Task :app-process:generateDebugBuildConfig
 > Task :app-process:generateDebugResources FROM-CACHE
-> Task :hidden-api:packageDebugResources
-> Task :hidden-api:processDebugNavigationResources FROM-CACHE
 > Task :app-process:packageDebugResources
-> Task :app-process:parseDebugLocalResources FROM-CACHE
-> Task :app-process:generateDebugRFile FROM-CACHE
+> Task :app-process:compileDebugAidl
+> Task :hidden-api:javaPreCompileDebug
 > Task :app-process:javaPreCompileDebug FROM-CACHE
-> Task :hidden-api:parseDebugLocalResources FROM-CACHE
-> Task :app-process:extractDeepLinksDebug FROM-CACHE
-> Task :hidden-api:generateDebugRFile FROM-CACHE
 > Task :app-process:writeDebugAarMetadata
-> Task :app-process:processDebugManifest FROM-CACHE
-> Task :hidden-api:compileDebugKotlin NO-SOURCE
-> Task :hidden-api:javaPreCompileDebug FROM-CACHE
+> Task :app-process:extractDeepLinksDebug
+> Task :hidden-api:parseDebugLocalResources
+> Task :app-process:parseDebugLocalResources
+> Task :app-process:processDebugManifest
+> Task :app-process:generateDebugRFile
+> Task :hidden-api:generateDebugRFile
 > Task :app-process:mapDebugSourceSetPaths
+> Task :hidden-api:compileDebugKotlin NO-SOURCE
 > Task :app-process:generateDebugAssets UP-TO-DATE
 > Task :app-process:compileDebugLibraryResources
 > Task :app-process:mergeDebugAssets
 > Task :app-process:mergeDebugJniLibFolders
 > Task :app-process:mergeDebugNativeLibs NO-SOURCE
 > Task :app-process:copyDebugJniLibsProjectOnly
-> Task :hidden-api:compileDebugJavaWithJavac FROM-CACHE
+> Task :app:prepareLibraryDefinitionsUnstableDebug
+> Task :app:extractUnstableDebugSupportedLocales
+> Task :app:mapUnstableDebugSourceSetPaths
+> Task :app:generateUnstableDebugResources
+> Task :app:generateUnstableDebugLocaleConfig
+> Task :app:processUnstableDebugNavigationResources
+> Task :app:compileUnstableDebugAidl
+> Task :hidden-api:compileDebugJavaWithJavac
 > Task :hidden-api:bundleLibCompileToJarDebug
 > Task :app-process:compileDebugKotlin NO-SOURCE
-> Task :app:prepareLibraryDefinitionsUnstableDebug
+> Task :app:packageUnstableDebugResources
+> Task :app:javaPreCompileUnstableDebug
+> Task :app:parseUnstableDebugLocalResources
+> Task :app:checkUnstableDebugAarMetadata
+> Task :app:compileUnstableDebugNavigationResources
+> Task :app:generateUnstableDebugRFile
 > Task :app-process:compileDebugJavaWithJavac
 > Task :app-process:bundleLibCompileToJarDebug
 > Task :app-process:bundleLibRuntimeToJarDebug
 > Task :app-process:processDebugJavaRes NO-SOURCE
-> Task :app:compileUnstableDebugAidl FROM-CACHE
 > Task :app-process:bundleLibRuntimeToDirDebug
-> Task :app:extractUnstableDebugSupportedLocales
-> Task :app:mapUnstableDebugSourceSetPaths
-> Task :app:generateUnstableDebugLocaleConfig FROM-CACHE
-> Task :app:generateUnstableDebugResources FROM-CACHE
-> Task :app:packageUnstableDebugResources
-> Task :app:processUnstableDebugNavigationResources FROM-CACHE
-> Task :app:javaPreCompileUnstableDebug FROM-CACHE
-> Task :app:compileUnstableDebugNavigationResources FROM-CACHE
-> Task :app:checkUnstableDebugAarMetadata
-> Task :app:parseUnstableDebugLocalResources
-> Task :app:generateUnstableDebugRFile FROM-CACHE
-> Task :app:createUnstableDebugCompatibleScreenManifests
-> Task :app:extractDeepLinksUnstableDebug FROM-CACHE
 > Task :app:mergeUnstableDebugResources
+> Task :app:createUnstableDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksUnstableDebug
 > Task :app:processUnstableDebugMainManifest
 > Task :app:processUnstableDebugManifest
 > Task :app:preUnstableDebugUnitTestBuild UP-TO-DATE
@@ -171,35 +171,52 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :app:generateUnstableDebugGlobalSynthetics
 > Task :app:checkUnstableDebugDuplicateClasses
 > Task :app:mergeUnstableDebugJniLibFolders
-> Task :app:mergeLibDexUnstableDebug
 > Task :app:mergeUnstableDebugNativeLibs
+
+> Task :app:stripUnstableDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libimage_processing_util_jni.so. Run with --info option to learn more.
+
+> Task :app:mergeLibDexUnstableDebug
 > Task :app:validateSigningUnstableDebug
-> Task :app:stripUnstableDebugDebugSymbols NO-SOURCE
 > Task :app:writeUnstableDebugAppMetadata
 > Task :app:writeUnstableDebugSigningConfigVersions
 > Task :app:desugarUnstableDebugFileDependencies
 > Task :app:kspUnstableDebugKotlin
 > Task :app:mergeExtDexUnstableDebug
 > Task :app:compileUnstableDebugKotlin
-> Task :app:compileUnstableDebugJavaWithJavac
-> Task :app:processUnstableDebugJavaRes
-> Task :app:bundleUnstableDebugClassesToRuntimeJar
-> Task :app:bundleUnstableDebugClassesToCompileJar
-> Task :app:dexBuilderUnstableDebug
-> Task :app:kspUnstableDebugUnitTestKotlin
-> Task :app:mergeProjectDexUnstableDebug
-> Task :app:mergeUnstableDebugJavaResource
-> Task :app:packageUnstableDebug
-> Task :app:createUnstableDebugApkListingFileRedirect
-> Task :app:assembleUnstableDebug
-> Task :app:compileUnstableDebugUnitTestKotlin
-> Task :app:compileUnstableDebugUnitTestJavaWithJavac NO-SOURCE
+e: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/java/com/rosan/installer/data/appmanager/InstalledAppsRepositoryImpl.kt:122:13 Cannot infer type for type parameter 'R'. Specify it explicitly.
+e: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/java/com/rosan/installer/data/appmanager/InstalledAppsRepositoryImpl.kt:122:37 None of the following candidates is applicable:
+
+fun uninstall(p0: VersionedPackage, p1: IntentSender): Unit:
+  Argument type mismatch: actual type is 'String', but 'VersionedPackage' was expected.
+
+fun uninstall(p0: String, p1: IntentSender): Unit
+e: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/java/com/rosan/installer/data/appmanager/InstalledAppsRepositoryImpl.kt:122:60 Argument type mismatch: actual type is 'PendingIntent!', but 'IntentSender' was expected.
+e: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/java/com/rosan/installer/data/appmanager/InstalledAppsRepositoryImpl.kt:123:18 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/java/com/rosan/installer/data/share/LocalShareDashboard.kt:38:126 Unresolved reference 'escapeHtml'.
+e: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/java/com/rosan/installer/data/share/LocalShareManager.kt:64:92 The feature "references to synthetic java properties" is unsupported.
+
+> Task :app:compileUnstableDebugKotlin FAILED
 > Task :app:copyRoomSchemas NO-SOURCE
-> Task :app:processUnstableDebugUnitTestJavaRes
-> Task :app:testUnstableDebugUnitTest
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793708201206.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793710230760.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileUnstableDebugKotlin' (registered by plugin 'com.android.internal.application').
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+   > Kotlin compiler: CANNOT_INFER_PARAMETER_TYPE
+       Kotlin compiler error
+         Cannot infer type for type parameter 'R'. Specify it explicitly.
+         Location: /home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/main/java/com/rosan/installer/data/appmanager/InstalledAppsRepositoryImpl.kt:122
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
 
 Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
 
@@ -207,6 +224,6 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 2m 52s
-87 actionable tasks: 54 executed, 24 from cache, 9 up-to-date
-BUILD_EXIT=0
+BUILD FAILED in 2m 29s
+75 actionable tasks: 62 executed, 4 from cache, 9 up-to-date
+BUILD_EXIT=1

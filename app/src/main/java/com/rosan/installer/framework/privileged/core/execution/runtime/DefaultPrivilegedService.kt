@@ -24,10 +24,10 @@ import android.net.IConnectivityManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.ParcelFileDescriptor
 import android.os.IBinder
 import android.os.IUserManager
 import android.os.Parcel
+import android.os.ParcelFileDescriptor
 import android.os.Process as AndroidProcess
 import android.os.RemoteException
 import android.os.ResultReceiver
@@ -38,9 +38,9 @@ import androidx.core.net.toUri
 import com.rosan.installer.ICommandOutputListener
 import com.rosan.installer.core.reflection.ReflectionProvider
 import com.rosan.installer.core.reflection.getValue
-import com.rosan.installer.domain.obb.model.ObbPathPolicy
 import com.rosan.installer.core.reflection.invoke
 import com.rosan.installer.core.reflection.invokeStatic
+import com.rosan.installer.domain.obb.model.ObbPathPolicy
 import com.rosan.installer.framework.privileged.core.context.hook.resolveSettingsBinder
 import com.rosan.installer.util.deletePaths
 import com.rosan.installer.util.pm.REASON_REMIND_OWNERSHIP

@@ -18,11 +18,6 @@ import com.rosan.installer.domain.settings.model.preferences.PredictiveBackAnima
 import com.rosan.installer.domain.settings.model.preferences.ThemeState
 import com.rosan.installer.ui.animation.predictiveback.installerNavTransition
 import com.rosan.installer.ui.page.main.settings.SettingsSharedViewModel
-import com.rosan.installer.ui.page.main.tools.AppManagerPage
-import com.rosan.installer.ui.page.main.tools.LocalSharePage
-import com.rosan.installer.ui.page.main.tools.QrScannerPage
-import com.rosan.installer.ui.page.main.tools.RemoteDownloadPage
-import com.rosan.installer.ui.page.main.tools.SendToTvPage
 import com.rosan.installer.ui.page.main.settings.config.apply.ApplyPage
 import com.rosan.installer.ui.page.main.settings.config.edit.EditPage
 import com.rosan.installer.ui.page.main.settings.home.installer.DefaultInstallerPage
@@ -37,6 +32,11 @@ import com.rosan.installer.ui.page.main.settings.preferred.lab.LabPage
 import com.rosan.installer.ui.page.main.settings.preferred.network.NetworkPage
 import com.rosan.installer.ui.page.main.settings.preferred.theme.ThemeSettingsPage
 import com.rosan.installer.ui.page.main.settings.preferred.uninstaller.UninstallerGlobalSettingsPage
+import com.rosan.installer.ui.page.main.tools.AppManagerPage
+import com.rosan.installer.ui.page.main.tools.LocalSharePage
+import com.rosan.installer.ui.page.main.tools.QrScannerPage
+import com.rosan.installer.ui.page.main.tools.RemoteDownloadPage
+import com.rosan.installer.ui.page.main.tools.SendToTvPage
 import com.rosan.installer.ui.page.miuix.settings.config.apply.MiuixApplyPage
 import com.rosan.installer.ui.page.miuix.settings.config.edit.MiuixEditPage
 import com.rosan.installer.ui.page.miuix.settings.home.installer.MiuixDefaultInstallerPage
