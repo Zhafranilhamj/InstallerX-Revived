@@ -81,7 +81,8 @@ jobs:
           set -o pipefail
           ./gradlew spotlessApply --no-configuration-cache
           git diff --binary > /tmp/spotless.patch
-          split -b 45000 -d /tmp/spotless.patch /tmp/spotless-patch-
+          head -c 24000 /tmp/spotless.patch > /tmp/spotless-limited.patch
+          split -b 3000 -d /tmp/spotless-limited.patch /tmp/spotless-patch-
           for chunk in /tmp/spotless-patch-*; do
             echo "::error title=ArenaFormatPatch-$(basename "$chunk")::$(base64 -w0 "$chunk")"
           done
@@ -101,8 +102,8 @@ jobs:
         if: steps.tests.outcome == 'failure'
         shell: bash
         run: |
-          tail -n 2500 /tmp/unit-tests.log > /tmp/unit-tests-tail.log
-          split -b 45000 -d /tmp/unit-tests-tail.log /tmp/unit-tests-chunk-
+          { grep -E '^e:|error:|FAILED|Exception|Unresolved|Compilation|What went wrong|Caused by' /tmp/unit-tests.log | tail -n 200; tail -n 80 /tmp/unit-tests.log; } | head -c 24000 > /tmp/unit-tests-tail.log
+          split -b 3000 -d /tmp/unit-tests-tail.log /tmp/unit-tests-chunk-
           for chunk in /tmp/unit-tests-chunk-*; do
             echo "::error title=ArenaTestLog-$(basename "$chunk")::$(base64 -w0 "$chunk")"
           done
