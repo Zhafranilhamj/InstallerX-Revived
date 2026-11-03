@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   packages: read
 
 jobs:
@@ -92,16 +92,3 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           archive: false
-
-      - name: Publish APK to agent branch (temporary)
-        if: github.ref_name == 'arena/c6c063fb-installerx-revived'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p ci-out
-          cp app/build/outputs/apk/Unstable/debug/app-Unstable-debug.apk ci-out/installerx-android-yml.apk
-          git config user.name "arena-agent"
-          git config user.email "arena-agent@users.noreply.github.com"
-          git add ci-out/installerx-android-yml.apk
-          git commit -m "chore: publish android.yml APK [skip ci] [skip dev]"
-          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${GITHUB_REF_NAME}"
