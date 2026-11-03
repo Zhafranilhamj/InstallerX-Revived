@@ -1,0 +1,212 @@
+===== spotlessApply =====
+Starting a Gradle Daemon (subsequent builds will be faster)
+Configuration on demand is an incubating feature.
+> Task :build-plugins:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :build-plugins:generateExternalPluginSpecBuilders FROM-CACHE
+> Task :build-plugins:extractPrecompiledScriptPluginPlugins FROM-CACHE
+> Task :build-plugins:compilePluginsBlocks FROM-CACHE
+> Task :build-plugins:generatePrecompiledScriptPluginAccessors FROM-CACHE
+> Task :build-plugins:generateScriptPluginAdapters FROM-CACHE
+> Task :build-plugins:compileKotlin FROM-CACHE
+> Task :build-plugins:compileJava NO-SOURCE
+> Task :build-plugins:pluginDescriptors
+> Task :build-plugins:processResources
+> Task :build-plugins:classes
+> Task :build-plugins:jar
+
+> Configure project :app
+WARNING: The option setting 'android.r8.maxWorkers=4' is experimental.
+The current default is '1'.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+No custom signing info. Debug build will use the default debug keystore.
+No custom signing info. Release build will use the default debug keystore.
+
+> Task :spotlessKotlin
+> Task :spotlessKotlinApply
+> Task :spotlessKotlinGradle
+> Task :spotlessKotlinGradleApply
+> Task :spotlessApply
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793708168721.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 32s
+13 actionable tasks: 7 executed, 6 from cache
+SPOTLESS_EXIT=0
+===== spotlessCheck =====
+Configuration on demand is an incubating feature.
+> Task :build-plugins:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :build-plugins:generateExternalPluginSpecBuilders UP-TO-DATE
+> Task :build-plugins:extractPrecompiledScriptPluginPlugins UP-TO-DATE
+> Task :build-plugins:compilePluginsBlocks UP-TO-DATE
+> Task :build-plugins:generatePrecompiledScriptPluginAccessors UP-TO-DATE
+> Task :build-plugins:generateScriptPluginAdapters UP-TO-DATE
+> Task :build-plugins:compileKotlin UP-TO-DATE
+> Task :build-plugins:compileJava NO-SOURCE
+> Task :build-plugins:pluginDescriptors UP-TO-DATE
+> Task :build-plugins:processResources UP-TO-DATE
+> Task :build-plugins:classes UP-TO-DATE
+> Task :build-plugins:jar UP-TO-DATE
+
+> Configure project :app
+WARNING: The option setting 'android.r8.maxWorkers=4' is experimental.
+The current default is '1'.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+No custom signing info. Debug build will use the default debug keystore.
+No custom signing info. Release build will use the default debug keystore.
+
+> Task :spotlessKotlin UP-TO-DATE
+> Task :spotlessKotlinCheck UP-TO-DATE
+> Task :spotlessKotlinGradle UP-TO-DATE
+> Task :spotlessKotlinGradleCheck UP-TO-DATE
+> Task :spotlessCheck UP-TO-DATE
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793708199470.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2s
+13 actionable tasks: 13 up-to-date
+SPOTLESS_CHECK_EXIT=0
+===== testUnstableDebugUnitTest + assembleUnstableDebug =====
+Configuration on demand is an incubating feature.
+> Task :build-plugins:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :build-plugins:generateExternalPluginSpecBuilders UP-TO-DATE
+> Task :build-plugins:extractPrecompiledScriptPluginPlugins UP-TO-DATE
+> Task :build-plugins:compilePluginsBlocks UP-TO-DATE
+> Task :build-plugins:generatePrecompiledScriptPluginAccessors UP-TO-DATE
+> Task :build-plugins:generateScriptPluginAdapters UP-TO-DATE
+> Task :build-plugins:compileKotlin UP-TO-DATE
+> Task :build-plugins:compileJava NO-SOURCE
+> Task :build-plugins:pluginDescriptors UP-TO-DATE
+> Task :build-plugins:processResources UP-TO-DATE
+> Task :build-plugins:classes UP-TO-DATE
+> Task :build-plugins:jar UP-TO-DATE
+
+> Configure project :app
+WARNING: The option setting 'android.r8.maxWorkers=4' is experimental.
+The current default is '1'.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+No custom signing info. Debug build will use the default debug keystore.
+No custom signing info. Release build will use the default debug keystore.
+
+> Task :hidden-api:preBuild UP-TO-DATE
+> Task :app-process:preBuild UP-TO-DATE
+> Task :hidden-api:preDebugBuild UP-TO-DATE
+> Task :app-process:preDebugBuild UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preUnstableDebugBuild UP-TO-DATE
+> Task :hidden-api:generateDebugResources FROM-CACHE
+> Task :app:generateUnstableDebugBuildConfig
+> Task :app-process:compileDebugAidl FROM-CACHE
+> Task :app-process:extractDebugSupportedLocales FROM-CACHE
+> Task :app-process:processDebugNavigationResources FROM-CACHE
+> Task :app-process:generateDebugBuildConfig
+> Task :app-process:generateDebugResources FROM-CACHE
+> Task :hidden-api:packageDebugResources
+> Task :hidden-api:processDebugNavigationResources FROM-CACHE
+> Task :app-process:packageDebugResources
+> Task :app-process:parseDebugLocalResources FROM-CACHE
+> Task :app-process:generateDebugRFile FROM-CACHE
+> Task :app-process:javaPreCompileDebug FROM-CACHE
+> Task :hidden-api:parseDebugLocalResources FROM-CACHE
+> Task :app-process:extractDeepLinksDebug FROM-CACHE
+> Task :hidden-api:generateDebugRFile FROM-CACHE
+> Task :app-process:writeDebugAarMetadata
+> Task :app-process:processDebugManifest FROM-CACHE
+> Task :hidden-api:compileDebugKotlin NO-SOURCE
+> Task :hidden-api:javaPreCompileDebug FROM-CACHE
+> Task :app-process:mapDebugSourceSetPaths
+> Task :app-process:generateDebugAssets UP-TO-DATE
+> Task :app-process:compileDebugLibraryResources
+> Task :app-process:mergeDebugAssets
+> Task :app-process:mergeDebugJniLibFolders
+> Task :app-process:mergeDebugNativeLibs NO-SOURCE
+> Task :app-process:copyDebugJniLibsProjectOnly
+> Task :hidden-api:compileDebugJavaWithJavac FROM-CACHE
+> Task :hidden-api:bundleLibCompileToJarDebug
+> Task :app-process:compileDebugKotlin NO-SOURCE
+> Task :app:prepareLibraryDefinitionsUnstableDebug
+> Task :app-process:compileDebugJavaWithJavac
+> Task :app-process:bundleLibCompileToJarDebug
+> Task :app-process:bundleLibRuntimeToJarDebug
+> Task :app-process:processDebugJavaRes NO-SOURCE
+> Task :app:compileUnstableDebugAidl FROM-CACHE
+> Task :app-process:bundleLibRuntimeToDirDebug
+> Task :app:extractUnstableDebugSupportedLocales
+> Task :app:mapUnstableDebugSourceSetPaths
+> Task :app:generateUnstableDebugLocaleConfig FROM-CACHE
+> Task :app:generateUnstableDebugResources FROM-CACHE
+> Task :app:packageUnstableDebugResources
+> Task :app:processUnstableDebugNavigationResources FROM-CACHE
+> Task :app:javaPreCompileUnstableDebug FROM-CACHE
+> Task :app:compileUnstableDebugNavigationResources FROM-CACHE
+> Task :app:checkUnstableDebugAarMetadata
+> Task :app:parseUnstableDebugLocalResources
+> Task :app:generateUnstableDebugRFile FROM-CACHE
+> Task :app:createUnstableDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksUnstableDebug FROM-CACHE
+> Task :app:mergeUnstableDebugResources
+> Task :app:processUnstableDebugMainManifest
+> Task :app:processUnstableDebugManifest
+> Task :app:preUnstableDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileUnstableDebugUnitTest FROM-CACHE
+> Task :app:mergeUnstableDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateUnstableDebugAssets UP-TO-DATE
+> Task :app:mergeUnstableDebugAssets
+> Task :app:processUnstableDebugManifestForPackage
+> Task :app:compressUnstableDebugAssets
+> Task :app:processUnstableDebugResources
+> Task :app:generateUnstableDebugGlobalSynthetics
+> Task :app:checkUnstableDebugDuplicateClasses
+> Task :app:mergeUnstableDebugJniLibFolders
+> Task :app:mergeLibDexUnstableDebug
+> Task :app:mergeUnstableDebugNativeLibs
+> Task :app:validateSigningUnstableDebug
+> Task :app:stripUnstableDebugDebugSymbols NO-SOURCE
+> Task :app:writeUnstableDebugAppMetadata
+> Task :app:writeUnstableDebugSigningConfigVersions
+> Task :app:desugarUnstableDebugFileDependencies
+> Task :app:kspUnstableDebugKotlin
+> Task :app:mergeExtDexUnstableDebug
+> Task :app:compileUnstableDebugKotlin
+> Task :app:compileUnstableDebugJavaWithJavac
+> Task :app:processUnstableDebugJavaRes
+> Task :app:bundleUnstableDebugClassesToRuntimeJar
+> Task :app:bundleUnstableDebugClassesToCompileJar
+> Task :app:dexBuilderUnstableDebug
+> Task :app:kspUnstableDebugUnitTestKotlin
+> Task :app:mergeProjectDexUnstableDebug
+> Task :app:mergeUnstableDebugJavaResource
+> Task :app:packageUnstableDebug
+> Task :app:createUnstableDebugApkListingFileRedirect
+> Task :app:assembleUnstableDebug
+> Task :app:compileUnstableDebugUnitTestKotlin
+> Task :app:compileUnstableDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:copyRoomSchemas NO-SOURCE
+> Task :app:processUnstableDebugUnitTestJavaRes
+> Task :app:testUnstableDebugUnitTest
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793708201206.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2m 52s
+87 actionable tasks: 54 executed, 24 from cache, 9 up-to-date
+BUILD_EXIT=0
