@@ -44,6 +44,8 @@ import com.rosan.installer.domain.virustotal.model.VirusTotalException
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanOutcome
+import com.rosan.installer.domain.virustotal.model.automaticScanMethod
+import com.rosan.installer.domain.virustotal.model.isMandatoryScan
 import com.rosan.installer.domain.virustotal.usecase.GetVirusTotalCommunityScoresUseCase
 import com.rosan.installer.domain.virustotal.usecase.ScanFileByHashUseCase
 import com.rosan.installer.domain.virustotal.usecase.UploadFileForScanUseCase
@@ -179,7 +181,7 @@ class InstallerViewModel(
                     _localState.update {
                         it.copy(virusTotalScan = VirusTotalScanState(mode = mode, apiKey = key, networkEnabled = networkEnabled))
                     }
-                    ensureStrictScan()
+                    ensureAutomaticScan()
                 }
         }
     }
@@ -651,7 +653,7 @@ class InstallerViewModel(
                 }
 
                 if (newStage is InstallerStage.InstallPrepare) {
-                    ensureStrictScan()
+                    ensureAutomaticScan()
                 }
 
                 autoInstallJob?.cancel()
@@ -869,22 +871,26 @@ class InstallerViewModel(
                 resetVirusTotalScan()
             }
 
-            ensureStrictScan()
+            ensureAutomaticScan()
         } else {
             _localState.update { it.copy(stage = InstallerStage.InstallChoice) }
         }
     }
 
     /**
-     * Strict mode requires an upload scan for the package shown in the prepare dialog.
+     * Starts the mode's automatic scan for the package shown in the prepare dialog.
      *
-     * The scan is started as soon as the prepare stage is reached, including the single-package
-     * path that maps straight to the stage without going through [installPrepare], so the scan
-     * gate can never be skipped by the install button.
+     * Normal mode performs a non-blocking SHA-256 hash lookup and never uploads the file;
+     * Strict mode performs the mandatory upload scan that gates the install button. The scan is
+     * started as soon as the prepare stage is reached, including the single-package path that maps
+     * straight to the stage without going through [installPrepare], so it cannot be skipped.
      */
-    private fun ensureStrictScan() {
+    private fun ensureAutomaticScan() {
         val packageName = _localState.value.currentPackageName ?: return
-        if (uiState.value.virusTotalScan.mode != VirusTotalScanMode.STRICT) return
+        val scan = uiState.value.virusTotalScan
+        val method = scan.mode.automaticScanMethod() ?: return
+        // Respect the runtime network boundary and key validation before starting any request.
+        if (!scan.networkEnabled || !scan.hasUsableApiKey) return
 
         val local = _localState.value.virusTotalScan
         val alreadyHandled = local.packageName == packageName &&
@@ -893,8 +899,8 @@ class InstallerViewModel(
 
         startScanForPackage(
             packageName = packageName,
-            method = VirusTotalScanMethod.UPLOAD,
-            mandatory = true,
+            method = method,
+            mandatory = scan.mode.isMandatoryScan(),
         )
     }
 

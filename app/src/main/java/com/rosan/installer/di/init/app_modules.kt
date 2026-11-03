@@ -12,6 +12,7 @@ import com.rosan.installer.di.packageUpdateModule
 import com.rosan.installer.di.privilegedModule
 import com.rosan.installer.di.serializationModule
 import com.rosan.installer.di.settingsModule
+import com.rosan.installer.di.toolsModule
 import com.rosan.installer.di.updateModule
 import com.rosan.installer.di.viewModelModule
 import com.rosan.installer.di.virusTotalModule
@@ -30,4 +31,5 @@ val appModules = listOf(
     initModule,
     privilegedModule,
     virusTotalModule,
+    toolsModule,
 )

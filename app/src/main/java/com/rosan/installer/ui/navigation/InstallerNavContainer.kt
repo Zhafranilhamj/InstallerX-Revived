@@ -18,6 +18,11 @@ import com.rosan.installer.domain.settings.model.preferences.PredictiveBackAnima
 import com.rosan.installer.domain.settings.model.preferences.ThemeState
 import com.rosan.installer.ui.animation.predictiveback.installerNavTransition
 import com.rosan.installer.ui.page.main.settings.SettingsSharedViewModel
+import com.rosan.installer.ui.page.main.tools.AppManagerPage
+import com.rosan.installer.ui.page.main.tools.LocalSharePage
+import com.rosan.installer.ui.page.main.tools.QrScannerPage
+import com.rosan.installer.ui.page.main.tools.RemoteDownloadPage
+import com.rosan.installer.ui.page.main.tools.SendToTvPage
 import com.rosan.installer.ui.page.main.settings.config.apply.ApplyPage
 import com.rosan.installer.ui.page.main.settings.config.edit.EditPage
 import com.rosan.installer.ui.page.main.settings.home.installer.DefaultInstallerPage
@@ -56,12 +61,12 @@ import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun InstallerNavContainer(uiState: ThemeState) {
+fun InstallerNavContainer(uiState: ThemeState, initialRoute: Route = Route.Main) {
     val sharedViewModel: SettingsSharedViewModel = koinViewModel(
         viewModelStoreOwner = LocalActivity.current as ComponentActivity,
     )
 
-    val backStack = rememberNavBackStack<Route>(Route.Main)
+    val backStack = rememberNavBackStack<Route>(initialRoute)
     val navigator = remember(backStack) { Navigator(backStack) }
     val onBack = remember(navigator) { { navigator.pop() } }
     val useBlur = uiState.useBlur
@@ -115,6 +120,21 @@ fun InstallerNavContainer(uiState: ThemeState) {
                         Material3MainPageWrapper(uiState, sharedViewModel)
                     }
                 }
+            }
+            entry<Route.AppManager>(swipeDismiss = swipeBackDirection) {
+                InstallerNavEntry(interceptPredictiveBack, onBack) { AppManagerPage() }
+            }
+            entry<Route.LocalShare>(swipeDismiss = swipeBackDirection) {
+                InstallerNavEntry(interceptPredictiveBack, onBack) { LocalSharePage() }
+            }
+            entry<Route.SendToTv>(swipeDismiss = swipeBackDirection) {
+                InstallerNavEntry(interceptPredictiveBack, onBack) { SendToTvPage() }
+            }
+            entry<Route.QrScanner>(swipeDismiss = swipeBackDirection) {
+                InstallerNavEntry(interceptPredictiveBack, onBack) { QrScannerPage() }
+            }
+            entry<Route.RemoteDownload>(swipeDismiss = swipeBackDirection) {
+                InstallerNavEntry(interceptPredictiveBack, onBack) { RemoteDownloadPage() }
             }
             entry<Route.EditConfig>(swipeDismiss = NavSwipeDirection.None) { key ->
                 InstallerNavEntry(interceptPredictiveBack, onBack) {

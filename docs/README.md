@@ -33,7 +33,15 @@ The full user guide, installation instructions, advanced options, system integra
 - **System integration:** InstallerX can be locked as the default installer from the Home page status card, used with LSPosed modules such as [InxLocker](https://github.com/Chimioo/InxLocker), or installed as a replacement system package manager by advanced users.
 - **Modern UI:** Material 3 Expressive and Miuix interface styles, dark mode, dynamic color, advanced palettes, system icon packs, colorful dialogs, standard notifications, Live Activity, and Xiaomi HyperOS-style island notifications on supported Xiaomi devices.
 - **Safety controls:** package-name and SharedUID blacklists, signature mismatch and unknown-signature policy gates, permission preview, install flags, and one-time smart suggestions for selected blocked cases.
-- **VirusTotal scanning:** optional SHA-256 hash lookup or file upload in Normal mode, and mandatory upload-before-install in Strict mode, which refuses files that VirusTotal actually detects as malware. The API key is validated in Network settings, is required before either scanning mode can be selected, and is stored locally.
+- **VirusTotal scanning:** automatic SHA-256 hash lookup in Normal mode (no upload, advisory only), optional manual upload, and mandatory upload-before-install in Strict mode, which refuses files that VirusTotal actually detects as malware. The API key is validated in Network settings, is required before either scanning mode can be selected, and is stored locally.
+
+## Tools
+
+- **OBB support:** `.obb` entries inside XAPK/APKM containers are extracted automatically to `Android/obb/<package>/`, and standalone OBB files selected with an APK are attached to that install. Writes try direct filesystem I/O, then the existing Shizuku/Root privileged user service, then a user-granted SAF tree (grant it once from **Settings -> Preferred -> Tools -> Local sharing**). OBB failures never abort the APK install.
+- **Local sharing:** a built-in HTTP server and browser dashboard accept APK/APKS/APKM/XAPK/OBB uploads from a PC or phone on the same network. Access is limited to local-network peers and can be protected by an optional 4-8 digit PIN. The dashboard QR code can be scanned by another device running InstallerX.
+- **Send to TV:** scan the QR code shown by the TV-side dashboard (or enter its address and PIN), pick a package, and push it directly to the TV over HTTP.
+- **App manager:** inspect installed user and system apps with SDK levels, APK size, permissions, signature digests, install/update/last-used times, sort/filter by name, install date, size or last used time, and batch uninstall with a status log. Last-used times require the optional usage access permission.
+- **Remote downloader:** download packages from HTTP(S) URLs with local download history. `http(s)` package links, shared URLs from messaging apps, and `installerx://download?url=...` / `installerx://tv?u=...&p=...` deep links are handled by the link intake activity and passed to the normal installer. Downloads and local sharing never run while the in-app network access setting is off.
 
 ## Supported Android Versions
 
@@ -58,7 +66,7 @@ InstallerX is now published as a single APK. Network access is controlled by an 
 Network settings include an optional VirusTotal integration. Paste a 64-character VirusTotal API key to validate it; the app shows "Ready to scan" when the key is accepted. **Normal** and **Strict** stay greyed out until the key has been validated, so no scan mode can be selected without a working key. Then choose a scan mode:
 
 - **Off:** no VirusTotal requests are made.
-- **Normal:** the install confirmation screen offers **Scan with VirusTotal** (SHA-256 hash lookup) and **Upload files for scanning**. Scanning is optional, and a report never blocks installation.
+- **Normal:** the install confirmation screen starts a **SHA-256 hash lookup** automatically, without uploading any file. **Scan with VirusTotal** repeats the lookup and **Upload files for scanning** remains available for a full manual scan. A report never blocks installation, and the lookup is skipped while network access is off or no valid API key is stored.
 - **Strict:** the file is uploaded automatically and installation is blocked until the scan finishes. If the file is larger than 650 MB or the network request fails, the app shows an error and allows installation with a warning.
 
 Uploads up to and including 32 MB use the standard `/files` endpoint. Larger files, up to and including 650 MB, first request a single-use upload URL from `GET /files/upload_url`; the file is then streamed to that validated VirusTotal URL with the API key, and upload redirects are not followed. Files above 650 MB or with an unknown size are rejected before upload. Queued analyses keep polling while the scan is active instead of failing after a fixed two-minute window; closing the installer session cancels the scan.

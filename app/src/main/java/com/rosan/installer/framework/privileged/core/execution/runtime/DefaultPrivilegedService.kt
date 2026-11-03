@@ -23,10 +23,11 @@ import android.graphics.drawable.BitmapDrawable
 import android.net.IConnectivityManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.os.IBinder
 import android.os.IUserManager
 import android.os.Parcel
-import android.os.ParcelFileDescriptor
 import android.os.Process as AndroidProcess
 import android.os.RemoteException
 import android.os.ResultReceiver
@@ -37,12 +38,14 @@ import androidx.core.net.toUri
 import com.rosan.installer.ICommandOutputListener
 import com.rosan.installer.core.reflection.ReflectionProvider
 import com.rosan.installer.core.reflection.getValue
+import com.rosan.installer.domain.obb.model.ObbPathPolicy
 import com.rosan.installer.core.reflection.invoke
 import com.rosan.installer.core.reflection.invokeStatic
 import com.rosan.installer.framework.privileged.core.context.hook.resolveSettingsBinder
 import com.rosan.installer.util.deletePaths
 import com.rosan.installer.util.pm.REASON_REMIND_OWNERSHIP
 import java.io.File
+import java.io.FileInputStream
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import org.koin.core.component.inject
@@ -541,6 +544,38 @@ class DefaultPrivilegedService private constructor(private val runtime: Privileg
         }.onFailure { error ->
             Timber.tag(TAG).w(error, "Failed to parse package archive $path")
         }.getOrNull()
+    }
+
+    /**
+     * Privileged OBB write tier. Runs inside the Root/Shizuku user service, where Android/obb
+     * is writable even on scoped-storage builds. The file is written atomically through a
+     * temporary sibling so a failed copy never leaves a truncated OBB behind.
+     */
+    override fun writeObb(source: ParcelFileDescriptor, packageName: String, fileName: String): Boolean {
+        val safeName = ObbPathPolicy.safeFileName(fileName)
+        if (safeName == null || !ObbPathPolicy.isValidPackageName(packageName)) {
+            runCatching { source.close() }
+            return false
+        }
+        val directory = File(
+            File(Environment.getExternalStorageDirectory(), ObbPathPolicy.OBB_ROOT),
+            packageName,
+        )
+        val target = File(directory, safeName)
+        val temporary = File(directory, "$safeName.tmp")
+        return try {
+            if (!directory.isDirectory && !directory.mkdirs()) return false
+            FileInputStream(source.fileDescriptor).use { input ->
+                temporary.outputStream().use { output -> input.copyTo(output) }
+            }
+            temporary.renameTo(target) || (target.delete() && temporary.renameTo(target))
+        } catch (error: Exception) {
+            Timber.tag(TAG).w(error, "Privileged OBB write failed for $packageName/$safeName")
+            temporary.delete()
+            false
+        } finally {
+            runCatching { source.close() }
+        }
     }
 
     override fun getSessionDetails(sessionId: Int): Bundle? {

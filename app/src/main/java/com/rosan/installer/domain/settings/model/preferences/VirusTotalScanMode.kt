@@ -6,7 +6,7 @@ package com.rosan.installer.domain.settings.model.preferences
  * Controls how files are checked against VirusTotal before installation.
  *
  * - [OFF]: no VirusTotal request is made.
- * - [NORMAL]: scanning is optional; the user decides whether to check a file.
+ * - [NORMAL]: an advisory SHA-256 hash lookup starts automatically; installs are never blocked.
  * - [STRICT]: every file is uploaded and installation waits for the scan to finish.
  */
 enum class VirusTotalScanMode(val value: String) {

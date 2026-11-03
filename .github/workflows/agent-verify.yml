@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - 'arena/**'
+    paths:
+      - 'ci-trigger.txt'
 
 permissions:
   contents: write
