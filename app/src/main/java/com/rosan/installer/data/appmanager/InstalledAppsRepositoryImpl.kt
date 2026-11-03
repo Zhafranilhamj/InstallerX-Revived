@@ -119,7 +119,7 @@ class InstalledAppsRepositoryImpl(
                 intent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
             )
-            runCatching { installer.uninstall(packageName, pending) }
+            runCatching { installer.uninstall(packageName, pending.intentSender) }
                 .onFailure { error ->
                     holder.add(
                         UninstallStatus(

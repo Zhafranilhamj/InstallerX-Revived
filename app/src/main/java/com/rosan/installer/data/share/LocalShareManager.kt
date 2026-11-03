@@ -61,7 +61,7 @@ class LocalShareManager(
                     running = true,
                     config = config,
                     addresses = localAddresses(),
-                    receivedFiles = directory.listFiles()?.filter(File::isFile)?.map(File::name).orEmpty(),
+                    receivedFiles = directory.listFiles()?.filter { file -> file.isFile }?.map { file -> file.name }.orEmpty(),
                     lastError = null,
                 )
             }

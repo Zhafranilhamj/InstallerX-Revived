@@ -53,4 +53,11 @@ drop.addEventListener('dragover',function(e){e.preventDefault()});
 drop.addEventListener('drop',function(e){e.preventDefault();upload(e.dataTransfer.files)});
 refresh();setInterval(refresh,5000);
 </script></body></html>"""
+
+    private fun escapeHtml(value: String): String = value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;")
 }
