@@ -16,16 +16,14 @@ class GetVirusTotalCommunityScoresUseCase(
     private val scanner: VirusTotalScanner,
     private val appSettingsRepo: AppSettingsRepository,
 ) {
-    suspend operator fun invoke(sha256: String): Result<VirusTotalCommunityScores> =
-        virusTotalCommunityRequest(appSettingsRepo) { apiKey -> scanner.getCommunityScores(apiKey, sha256) }
+    suspend operator fun invoke(sha256: String): Result<VirusTotalCommunityScores> = virusTotalCommunityRequest(appSettingsRepo) { apiKey -> scanner.getCommunityScores(apiKey, sha256) }
 }
 
 class VoteOnVirusTotalFileUseCase(
     private val scanner: VirusTotalScanner,
     private val appSettingsRepo: AppSettingsRepository,
 ) {
-    suspend operator fun invoke(sha256: String, verdict: VirusTotalCommunityVerdict): Result<Unit> =
-        virusTotalCommunityRequest(appSettingsRepo) { apiKey -> scanner.voteOnFile(apiKey, sha256, verdict) }
+    suspend operator fun invoke(sha256: String, verdict: VirusTotalCommunityVerdict): Result<Unit> = virusTotalCommunityRequest(appSettingsRepo) { apiKey -> scanner.voteOnFile(apiKey, sha256, verdict) }
 }
 
 /** Both community operations obey the same network, mode, and API-key checks as scans. */

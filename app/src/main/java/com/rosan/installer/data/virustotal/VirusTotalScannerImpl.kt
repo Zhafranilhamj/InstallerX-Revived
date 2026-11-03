@@ -198,7 +198,9 @@ class VirusTotalScannerImpl(
                         analysisId = analysisId,
                     )
                 }
+
                 "failed" -> throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal failed to analyze this file.")
+
                 else -> Unit
             }
         }
@@ -255,15 +257,19 @@ class VirusTotalScannerImpl(
                 HTTP_OK -> response.body.string().ifEmpty {
                     throw VirusTotalException(VirusTotalErrorKind.UNKNOWN, "VirusTotal returned an empty response.")
                 }
+
                 HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> throw VirusTotalException(
                     authorizationError,
                     "VirusTotal denied this request. Check the API key and its permissions.",
                 )
+
                 HTTP_NOT_FOUND -> throw VirusTotalException(VirusTotalErrorKind.NOT_FOUND, notFoundMessage)
+
                 HTTP_TOO_MANY_REQUESTS -> throw VirusTotalException(
                     VirusTotalErrorKind.QUOTA_EXCEEDED,
                     "The VirusTotal API quota has been exceeded.",
                 )
+
                 else -> throw VirusTotalException(
                     VirusTotalErrorKind.UNKNOWN,
                     "VirusTotal returned HTTP ${response.code} $operation.",

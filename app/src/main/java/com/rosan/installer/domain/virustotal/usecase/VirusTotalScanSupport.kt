@@ -30,13 +30,16 @@ internal fun VirusTotalPreflight.blockingError(): VirusTotalScanError? = when {
         kind = VirusTotalErrorKind.SCAN_DISABLED,
         message = "VirusTotal scanning or network access is disabled in settings.",
     )
+
     apiKey.isEmpty() -> VirusTotalScanError(
         kind = VirusTotalErrorKind.NO_API_KEY,
         message = "No VirusTotal API key is configured.",
     )
+
     !VirusTotalApiKeyFormat.isValid(apiKey) -> VirusTotalScanError(
         kind = VirusTotalErrorKind.INVALID_API_KEY,
         message = "A VirusTotal API key must be 64 hexadecimal characters.",
     )
+
     else -> null
 }

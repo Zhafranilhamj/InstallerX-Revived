@@ -28,8 +28,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import okhttp3.OkHttpClient
 import mockwebserver3.RecordedRequest
+import okhttp3.OkHttpClient
 
 class VirusTotalScannerProtocolTest {
     private lateinit var server: MockWebServer

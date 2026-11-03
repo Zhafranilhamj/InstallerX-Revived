@@ -56,16 +56,25 @@ internal fun VirusTotalReport.detectionSummary(): String = if (positives > 0) {
 @Composable
 internal fun VirusTotalScanState.compactStatus(): String = when {
     !networkEnabled -> stringResource(R.string.virustotal_network_disabled)
+
     !hasApiKey -> stringResource(R.string.virustotal_no_api_key)
+
     !hasUsableApiKey -> stringResource(R.string.virustotal_scan_invalid_key)
+
     isScanning -> stringResource(
         if (method == VirusTotalScanMethod.UPLOAD) R.string.virustotal_scanning_upload else R.string.virustotal_scanning_hash,
     )
+
     isBlockedByMalware -> stringResource(R.string.virustotal_strict_scan_blocked)
+
     isStrict && status == VirusTotalScanStatus.FAILED -> stringResource(R.string.virustotal_scan_install_with_caution)
+
     report != null -> report.verdict.displayLabel()
+
     error != null -> error.kind.messageForDisplay()
+
     isStrict && status == VirusTotalScanStatus.IDLE -> stringResource(R.string.virustotal_strict_scan_required)
+
     else -> stringResource(R.string.virustotal_scan_ready)
 }
 

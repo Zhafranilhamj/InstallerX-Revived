@@ -539,16 +539,10 @@ class InstallerSelectionTest {
                 check(name == "isSystemApp")
                 true
             },
-            scanFileByHash = ScanFileByHashUseCase(
-                scanner = stub(),
-                appSettingsRepo = stub(),
-            ),
-            uploadFileForScan = UploadFileForScanUseCase(
-                scanner = stub(),
-                appSettingsRepo = stub(),
-            ),
-            getCommunityScores = GetVirusTotalCommunityScoresUseCase(stub(), stub()),
-            voteOnFile = VoteOnVirusTotalFileUseCase(stub(), stub()),
+            scanFileByHash = lazy { ScanFileByHashUseCase(scanner = stub(), appSettingsRepo = stub()) },
+            uploadFileForScan = lazy { UploadFileForScanUseCase(scanner = stub(), appSettingsRepo = stub()) },
+            getCommunityScores = lazy { GetVirusTotalCommunityScoresUseCase(stub(), stub()) },
+            voteOnFile = lazy { VoteOnVirusTotalFileUseCase(stub(), stub()) },
         )
 
         fun load(results: List<PackageAnalysisResult>) {

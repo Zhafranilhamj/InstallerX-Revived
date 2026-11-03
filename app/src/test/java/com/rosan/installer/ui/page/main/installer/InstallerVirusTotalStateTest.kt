@@ -141,10 +141,10 @@ class InstallerVirusTotalStateTest {
             getAppIconColor = GetAppIconColorUseCase(stub()),
             getAppLabel = GetAppLabelUseCase(stub { null }),
             deviceCapabilityProvider = stub { true },
-            scanFileByHash = ScanFileByHashUseCase(scanner, settings),
-            uploadFileForScan = UploadFileForScanUseCase(scanner, settings),
-            getCommunityScores = GetVirusTotalCommunityScoresUseCase(scanner, settings),
-            voteOnFile = VoteOnVirusTotalFileUseCase(scanner, settings),
+            scanFileByHash = lazy { ScanFileByHashUseCase(scanner, settings) },
+            uploadFileForScan = lazy { UploadFileForScanUseCase(scanner, settings) },
+            getCommunityScores = lazy { GetVirusTotalCommunityScoresUseCase(scanner, settings) },
+            voteOnFile = lazy { VoteOnVirusTotalFileUseCase(scanner, settings) },
         )
 
         fun load() {
@@ -192,8 +192,7 @@ class InstallerVirusTotalStateTest {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private inline fun <reified T> stub(crossinline answer: () -> Any? = { error("Unexpected dependency call") }): T =
-        Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, _, _ -> answer() } as T
+    private inline fun <reified T> stub(crossinline answer: () -> Any? = { error("Unexpected dependency call") }): T = Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, _, _ -> answer() } as T
 
     private companion object {
         const val KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

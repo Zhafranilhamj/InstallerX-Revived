@@ -105,9 +105,9 @@ fun MiuixVirusTotalScanCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = state.report?.verdict.icon() ?: Icons.Default.Security,
+                    imageVector = state.report?.verdict?.icon() ?: Icons.Default.Security,
                     contentDescription = null,
-                    tint = state.report?.verdict.color() ?: MiuixTheme.colorScheme.primary,
+                    tint = state.report?.verdict?.color() ?: MiuixTheme.colorScheme.primary,
                     modifier = Modifier.size(22.dp),
                 )
                 Spacer(Modifier.size(10.dp))
@@ -279,6 +279,7 @@ private fun MiuixVirusTotalReportView(
 private fun MiuixVirusTotalVerdictWarning(report: VirusTotalReport, strictMode: Boolean) {
     when (report.verdict) {
         VirusTotalVerdict.MALICIOUS -> Text(stringResource(R.string.virustotal_scan_malicious_warning), style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.error)
+
         VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> {
             // The original caution message is intentionally unchanged.
             Text(
@@ -286,13 +287,17 @@ private fun MiuixVirusTotalVerdictWarning(report: VirusTotalReport, strictMode: 
                 style = MiuixTheme.textStyles.body2,
                 color = virusTotalFalsePositiveColor(MiuixTheme.colorScheme.onSurface),
             )
-            if (strictMode) Text(
-                stringResource(R.string.virustotal_false_positive_strict_note),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
+            if (strictMode) {
+                Text(
+                    stringResource(R.string.virustotal_false_positive_strict_note),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
         }
+
         VirusTotalVerdict.SUSPICIOUS -> Text(stringResource(R.string.virustotal_scan_suspicious_warning), style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.tertiaryContainer)
+
         VirusTotalVerdict.CLEAN, VirusTotalVerdict.NOT_FOUND -> Unit
     }
 }
@@ -346,7 +351,13 @@ private fun MiuixCommunityVoteButton(verdict: VirusTotalCommunityVerdict, state:
         colors = if (harmless) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(),
     ) {
         Icon(
-            imageVector = if (selected) Icons.Default.Check else if (harmless) Icons.Default.ThumbUp else Icons.Default.ThumbDown,
+            imageVector = if (selected) {
+                Icons.Default.Check
+            } else if (harmless) {
+                Icons.Default.ThumbUp
+            } else {
+                Icons.Default.ThumbDown
+            },
             contentDescription = null,
             modifier = Modifier.size(16.dp),
         )

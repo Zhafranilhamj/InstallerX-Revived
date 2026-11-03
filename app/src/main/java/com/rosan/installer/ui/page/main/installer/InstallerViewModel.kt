@@ -77,10 +77,10 @@ class InstallerViewModel(
     private val getAppIconColor: GetAppIconColorUseCase,
     private val getAppLabel: GetAppLabelUseCase,
     private val deviceCapabilityProvider: DeviceCapabilityProvider,
-    private val scanFileByHash: ScanFileByHashUseCase,
-    private val uploadFileForScan: UploadFileForScanUseCase,
-    private val getCommunityScores: GetVirusTotalCommunityScoresUseCase,
-    private val voteOnFile: VoteOnVirusTotalFileUseCase,
+    private val scanFileByHash: Lazy<ScanFileByHashUseCase>,
+    private val uploadFileForScan: Lazy<UploadFileForScanUseCase>,
+    private val getCommunityScores: Lazy<GetVirusTotalCommunityScoresUseCase>,
+    private val voteOnFile: Lazy<VoteOnVirusTotalFileUseCase>,
 ) : ViewModel() {
 
     // Event channel for one-off side effects (e.g. Toasts)
@@ -1007,7 +1007,7 @@ class InstallerViewModel(
         }
         scanJob = viewModelScope.launch {
             val outcome = try {
-                if (method == VirusTotalScanMethod.HASH) scanFileByHash(data) else uploadFileForScan(data)
+                if (method == VirusTotalScanMethod.HASH) scanFileByHash.value(data) else uploadFileForScan.value(data)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1044,7 +1044,7 @@ class InstallerViewModel(
         }
         communityJob = viewModelScope.launch {
             val result = try {
-                getCommunityScores(sha256)
+                getCommunityScores.value(sha256)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1096,7 +1096,7 @@ class InstallerViewModel(
         }
         voteJob = viewModelScope.launch {
             val result = try {
-                voteOnFile(sha256, verdict)
+                voteOnFile.value(sha256, verdict)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {

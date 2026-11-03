@@ -94,9 +94,9 @@ fun VirusTotalScanCard(
         ) {
             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = state.report?.verdict.icon() ?: Icons.Default.Security,
+                    imageVector = state.report?.verdict?.icon() ?: Icons.Default.Security,
                     contentDescription = null,
-                    tint = state.report?.verdict.color() ?: MaterialTheme.colorScheme.primary,
+                    tint = state.report?.verdict?.color() ?: MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(22.dp),
                 )
                 Spacer(Modifier.size(10.dp))
@@ -282,6 +282,7 @@ private fun VirusTotalVerdictWarning(report: VirusTotalReport, strictMode: Boole
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
+
         VirusTotalVerdict.LIKELY_FALSE_POSITIVE -> {
             // Keep the original caution message unchanged; only its heading is called Suspicious.
             Text(
@@ -289,17 +290,21 @@ private fun VirusTotalVerdictWarning(report: VirusTotalReport, strictMode: Boole
                 style = MaterialTheme.typography.bodySmall,
                 color = virusTotalFalsePositiveColor(MaterialTheme.colorScheme.surface),
             )
-            if (strictMode) Text(
-                stringResource(R.string.virustotal_false_positive_strict_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (strictMode) {
+                Text(
+                    stringResource(R.string.virustotal_false_positive_strict_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+
         VirusTotalVerdict.SUSPICIOUS -> Text(
             stringResource(R.string.virustotal_scan_suspicious_warning),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.tertiary,
         )
+
         VirusTotalVerdict.CLEAN, VirusTotalVerdict.NOT_FOUND -> Unit
     }
 }
@@ -353,7 +358,13 @@ private fun CommunityVoteButton(verdict: VirusTotalCommunityVerdict, state: Viru
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
     ) {
         Icon(
-            imageVector = if (selected) Icons.Default.Check else if (harmless) Icons.Default.ThumbUp else Icons.Default.ThumbDown,
+            imageVector = if (selected) {
+                Icons.Default.Check
+            } else if (harmless) {
+                Icons.Default.ThumbUp
+            } else {
+                Icons.Default.ThumbDown
+            },
             contentDescription = null,
             modifier = Modifier.size(16.dp),
         )
