@@ -59,11 +59,15 @@ Network settings include an optional VirusTotal integration. Paste a 64-characte
 
 - **Off:** no VirusTotal requests are made.
 - **Normal:** the install confirmation screen offers **Scan with VirusTotal** (SHA-256 hash lookup) and **Upload files for scanning**. Scanning is optional, and a report never blocks installation.
-- **Strict:** the file is uploaded automatically and installation is blocked until the scan finishes. If the file is larger than 32 MB or the network request fails, the app shows an error and allows installation with a warning.
+- **Strict:** the file is uploaded automatically and installation is blocked until the scan finishes. If the file is larger than 650 MB or the network request fails, the app shows an error and allows installation with a warning.
 
-Scan results list the flagging engines and the name each engine reported. Detections that match the patterns VirusTotal routinely reports for repackaged or optimised APKs are shown in amber as a **likely false positive**, together with a caution that the file may still be unsafe; Strict mode still allows installing those. A report that is a real malicious verdict blocks installation in Strict mode.
+Uploads up to and including 32 MB use the standard `/files` endpoint. Larger files, up to and including 650 MB, first request a single-use upload URL from `GET /files/upload_url`; the file is then streamed to that URL. Files above 650 MB or with an unknown size are rejected before upload.
 
-The API key is stored locally on the device and is only sent to VirusTotal. Scanning is disabled when the in-app network access setting is off.
+The install screen uses a compact status card and separate hash-scan and upload cards. Scanning expands the status automatically; tap a completed status card to expand the report. Scan results list the flagging engines and the name each engine reported. Detections that match the patterns VirusTotal routinely reports for repackaged or optimised APKs are shown in amber as **Suspicious**, with the original caution that the file may still be unsafe; Strict mode still allows installing those. A report that is a real malicious verdict blocks installation in Strict mode.
+
+Expanded reports include VirusTotal's community harmless/malicious vote totals and reputation. You can vote harmless or malicious with the VirusTotal account associated with your API key, if that account has voting permission. Votes are public and do not change the antivirus verdict or Strict mode's install gate. Totals are refreshed from VirusTotal after a successful vote; a voting or score-loading failure never changes the scan result.
+
+The API key is stored locally on the device and is only sent to VirusTotal. Scanning and community requests are disabled when the in-app network access setting is off or the scan mode is Off.
 
 ## Building
 

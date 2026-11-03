@@ -41,7 +41,7 @@ class FileLoggingTree(private val context: Context) : Timber.DebugTree() {
     private val fileNameDateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
 
     // Drop oldest logs if the consumer can't keep up with the producer.
-    private val logChannel = Channel<String>(
+    private val logChannel = Channel<LogEntry>(
         capacity = CHANNEL_CAPACITY,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
@@ -54,8 +54,8 @@ class FileLoggingTree(private val context: Context) : Timber.DebugTree() {
             ensureDirectoryExists()
             initializeFromExistingFile()
 
-            logChannel.consumeEach { logContent ->
-                writeToFile(logContent)
+            logChannel.consumeEach { entry ->
+                writeToFile(formatEntry(entry))
             }
         }
     }
@@ -69,20 +69,30 @@ class FileLoggingTree(private val context: Context) : Timber.DebugTree() {
         // Filter out low priority logs in production if needed, generally INFO/WARN/ERROR
         // For debugging builds, keeping DEBUG/VERBOSE is fine.
 
-        val timestamp = getCurrentTimestamp()
-        val priorityStr = priorityToString(priority)
-        val finalTag = tag ?: "Unknown"
-
-        val logBuilder = StringBuilder()
-        logBuilder.append("$timestamp $priorityStr/$finalTag: $message\n")
-
-        if (t != null) {
-            logBuilder.append(Log.getStackTraceString(t)).append("\n")
-        }
-
-        // Non-blocking send
-        logChannel.trySend(logBuilder.toString())
+        // Capture the event time, but leave date formatting, stack traces, and string building
+        // to the IO consumer. Startup logging should not compete with the first Compose frame.
+        logChannel.trySend(LogEntry(System.currentTimeMillis(), priority, tag ?: "Unknown", message, t))
     }
+
+    private fun formatEntry(entry: LogEntry): String = buildString {
+        append(getCurrentTimestamp(entry.timestampMillis))
+        append(' ')
+        append(priorityToString(entry.priority))
+        append('/')
+        append(entry.tag)
+        append(": ")
+        append(entry.message)
+        append('\n')
+        entry.throwable?.let { append(Log.getStackTraceString(it)).append('\n') }
+    }
+
+    private data class LogEntry(
+        val timestampMillis: Long,
+        val priority: Int,
+        val tag: String,
+        val message: String,
+        val throwable: Throwable?,
+    )
 
     private fun ensureDirectoryExists() {
         if (!logDir.exists()) {
@@ -179,8 +189,8 @@ class FileLoggingTree(private val context: Context) : Timber.DebugTree() {
         }
     }
 
-    private fun getCurrentTimestamp(): String = synchronized(entryDateFormat) {
-        entryDateFormat.format(Date())
+    private fun getCurrentTimestamp(timestampMillis: Long): String = synchronized(entryDateFormat) {
+        entryDateFormat.format(Date(timestampMillis))
     }
 
     private fun priorityToString(priority: Int) = when (priority) {

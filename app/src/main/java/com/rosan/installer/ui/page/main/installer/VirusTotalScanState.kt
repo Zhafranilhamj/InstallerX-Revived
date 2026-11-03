@@ -4,6 +4,7 @@ package com.rosan.installer.ui.page.main.installer
 
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.virustotal.model.VirusTotalApiKeyFormat
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityVerdict
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
@@ -32,6 +33,10 @@ data class VirusTotalScanState(
     val error: VirusTotalScanError? = null,
     val packageName: String? = null,
     val mandatory: Boolean = false,
+    val isCommunityLoading: Boolean = false,
+    val isVoteSubmitting: Boolean = false,
+    val communityError: VirusTotalScanError? = null,
+    val submittedVote: VirusTotalCommunityVerdict? = null,
 ) {
     val isScanning: Boolean
         get() = status == VirusTotalScanStatus.SCANNING
@@ -64,6 +69,10 @@ data class VirusTotalScanState(
      */
     val blocksInstallation: Boolean
         get() = (mode == VirusTotalScanMode.STRICT && isScanning) || isBlockedByMalware
+
+    val canVote: Boolean
+        get() = mode != VirusTotalScanMode.OFF && hasUsableApiKey && networkEnabled &&
+            report?.sha256 != null && !isScanning && !isVoteSubmitting
 
     val hasApiKey: Boolean
         get() = apiKey.isNotBlank()

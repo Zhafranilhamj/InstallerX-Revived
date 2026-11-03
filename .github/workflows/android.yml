@@ -69,6 +69,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
+      - name: Check code formatting
+        run: ./gradlew spotlessCheck --no-configuration-cache
+
       - name: Run unit tests
         env:
           GITHUB_ACTOR: ${{ github.actor }}

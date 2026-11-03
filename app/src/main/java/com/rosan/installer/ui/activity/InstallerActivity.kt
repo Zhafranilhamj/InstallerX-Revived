@@ -128,7 +128,9 @@ class InstallerActivity :
         lifecycleScope.launch {
             // Re-check after configuration recreation as well: a previous lifecycle coroutine may
             // have been cancelled while waiting for the recovery DataStore transaction.
-            if (recoverFromAndroid17SelfUpdate()) return@launch
+            // The recovery manager rejects intents without CLEAR_TASK. Check that inexpensive
+            // flag before querying the platform referrer on every ordinary install-dialog launch.
+            if (intent.flags.hasFlag(Intent.FLAG_ACTIVITY_CLEAR_TASK) && recoverFromAndroid17SelfUpdate()) return@launch
             initializeInstaller(savedInstanceState)
         }
     }

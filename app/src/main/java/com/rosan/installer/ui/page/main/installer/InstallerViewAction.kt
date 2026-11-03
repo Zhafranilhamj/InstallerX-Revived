@@ -8,6 +8,7 @@ import com.rosan.installer.domain.engine.model.source.DataEntity
 import com.rosan.installer.domain.session.model.SelectInstallEntity
 import com.rosan.installer.domain.session.repository.InstallerSessionRepository
 import com.rosan.installer.domain.settings.model.config.InstallerMode
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityVerdict
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 
 sealed interface InstallerViewAction {
@@ -131,4 +132,9 @@ sealed interface InstallerViewAction {
         val data: DataEntity,
         val method: VirusTotalScanMethod,
     ) : InstallerViewAction
+
+    /** Posts a real community vote for the currently displayed report, never an older file. */
+    data class VoteOnVirusTotal(val sha256: String, val verdict: VirusTotalCommunityVerdict) : InstallerViewAction
+
+    data object RetryVirusTotalCommunity : InstallerViewAction
 }

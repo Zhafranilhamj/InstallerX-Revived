@@ -689,6 +689,12 @@ fun InstallPrepareContent(
                         ),
                     )
                 },
+                onVote = { verdict ->
+                    viewModel.uiState.value.virusTotalScan.report?.sha256?.let { sha256 ->
+                        viewModel.dispatch(InstallerViewAction.VoteOnVirusTotal(sha256, verdict))
+                    }
+                },
+                onRetryCommunity = { viewModel.dispatch(InstallerViewAction.RetryVirusTotalCommunity) },
             )
         }
 

@@ -37,12 +37,17 @@ import com.rosan.installer.domain.settings.model.config.InstallMode
 import com.rosan.installer.domain.settings.model.config.InstallerMode
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityScores
+import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityVerdict
 import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
+import com.rosan.installer.domain.virustotal.model.VirusTotalException
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanOutcome
+import com.rosan.installer.domain.virustotal.usecase.GetVirusTotalCommunityScoresUseCase
 import com.rosan.installer.domain.virustotal.usecase.ScanFileByHashUseCase
 import com.rosan.installer.domain.virustotal.usecase.UploadFileForScanUseCase
+import com.rosan.installer.domain.virustotal.usecase.VoteOnVirusTotalFileUseCase
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -55,7 +60,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -71,6 +79,8 @@ class InstallerViewModel(
     private val deviceCapabilityProvider: DeviceCapabilityProvider,
     private val scanFileByHash: ScanFileByHashUseCase,
     private val uploadFileForScan: UploadFileForScanUseCase,
+    private val getCommunityScores: GetVirusTotalCommunityScoresUseCase,
+    private val voteOnFile: VoteOnVirusTotalFileUseCase,
 ) : ViewModel() {
 
     // Event channel for one-off side effects (e.g. Toasts)
@@ -150,6 +160,8 @@ class InstallerViewModel(
     private val iconJobs = mutableMapOf<String, Job>()
     private var autoInstallJob: Job? = null
     private var scanJob: Job? = null
+    private var communityJob: Job? = null
+    private var voteJob: Job? = null
     private var pendingAutoInstall = false
     private val settingsLoadingJob: Job
     private var collectRepoJob: Job? = null
@@ -157,14 +169,26 @@ class InstallerViewModel(
 
     init {
         settingsLoadingJob = loadInitialSettings()
+        viewModelScope.launch {
+            appSettingsRepo.preferencesFlow
+                .map { Triple(it.virusTotalScanMode, it.virusTotalApiKey, it.allowInternetAccess) }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { (mode, key, networkEnabled) ->
+                    resetVirusTotalScan()
+                    _localState.update {
+                        it.copy(virusTotalScan = VirusTotalScanState(mode = mode, apiKey = key, networkEnabled = networkEnabled))
+                    }
+                    ensureStrictScan()
+                }
+        }
     }
 
     /**
      * Loads the installer-specific settings from the aggregated preferences snapshot.
      *
-     * A single read is used instead of one collected flow per setting because the collected repo
-     * flow waits for this job before it can move the UI past the previous stage, so every extra
-     * DataStore round trip delayed the install dialog from appearing.
+     * This snapshot supplies icon preferences to background icon jobs. It must not gate session
+     * progress: the dialog can render while icon preferences are still being read.
      */
     private fun loadInitialSettings() = viewModelScope.launch {
         val prefs = appSettingsRepo.preferencesFlow.first()
@@ -273,6 +297,10 @@ class InstallerViewModel(
                 method = action.method,
                 mandatory = false,
             )
+
+            is InstallerViewAction.VoteOnVirusTotal -> submitVote(action.sha256, action.verdict)
+
+            is InstallerViewAction.RetryVirusTotalCommunity -> retryCommunity()
 
             is InstallerViewAction.ShareApp -> shareApp(action.appEntity)
 
@@ -409,9 +437,7 @@ class InstallerViewModel(
     private fun collectRepo(session: InstallerSessionRepository) {
         if (this.session !== session) {
             packageSelectionsBeforeClear.clear()
-            scanJob?.cancel()
-            pendingAutoInstall = false
-            _localState.update { it.copy(virusTotalScan = VirusTotalScanState()) }
+            resetVirusTotalScan()
         }
         this.session = session
         if (session.config.enableCustomizeUser) {
@@ -440,8 +466,7 @@ class InstallerViewModel(
         autoInstallJob?.cancel()
 
         collectRepoJob = viewModelScope.launch {
-            settingsLoadingJob.join()
-
+            // Do not wait for an unrelated settings read before rendering session progress.
             combine(
                 session.progress,
                 session.uninstallInfo,
@@ -593,6 +618,7 @@ class InstallerViewModel(
                             }
                         } else {
                             viewModelScope.launch {
+                                settingsLoadingJob.join()
                                 val rawEntities = _localState.value.analysisResults
                                     .find { it.packageName == newPackageName }?.appEntities?.map { it.app }
 
@@ -704,6 +730,7 @@ class InstallerViewModel(
 
         iconJobs[packageName]?.cancel()
         iconJobs[packageName] = viewModelScope.launch {
+            settingsLoadingJob.join()
             val loadedIconBitmap = getAppIcon(
                 sessionId = session.id,
                 packageName = packageName,
@@ -725,6 +752,8 @@ class InstallerViewModel(
 
     override fun onCleared() {
         scanJob?.cancel()
+        communityJob?.cancel()
+        voteJob?.cancel()
         pendingAutoInstall = false
         super.onCleared()
     }
@@ -736,6 +765,8 @@ class InstallerViewModel(
         packageSelectionsBeforeClear.clear()
         autoInstallJob?.cancel()
         scanJob?.cancel()
+        communityJob?.cancel()
+        voteJob?.cancel()
         pendingAutoInstall = false
         collectRepoJob?.cancel()
         iconJobs.values.forEach { it.cancel() }
@@ -747,6 +778,8 @@ class InstallerViewModel(
     private fun cancel() {
         autoInstallJob?.cancel()
         scanJob?.cancel()
+        communityJob?.cancel()
+        voteJob?.cancel()
         pendingAutoInstall = false
         iconJobs.values.forEach { it.cancel() }
         session.cancel()
@@ -832,21 +865,8 @@ class InstallerViewModel(
                 )
             }
 
-            val currentScan = uiState.value.virusTotalScan
-            if (currentScan.packageName != targetPackageName) {
-                scanJob?.cancel()
-                _localState.update { state ->
-                    state.copy(
-                        virusTotalScan = currentScan.copy(
-                            status = VirusTotalScanStatus.IDLE,
-                            method = null,
-                            report = null,
-                            error = null,
-                            packageName = null,
-                            mandatory = false,
-                        ),
-                    )
-                }
+            if (_localState.value.virusTotalScan.packageName != targetPackageName) {
+                resetVirusTotalScan()
             }
 
             ensureStrictScan()
@@ -920,6 +940,10 @@ class InstallerViewModel(
     ) {
         val entity = primaryEntityForPackage(packageName)
         if (entity == null) {
+            scanJob?.cancel()
+            communityJob?.cancel()
+            voteJob?.cancel()
+            pendingAutoInstall = false
             val current = uiState.value.virusTotalScan
             _localState.update { state ->
                 state.copy(
@@ -933,6 +957,10 @@ class InstallerViewModel(
                         ),
                         packageName = packageName,
                         mandatory = mandatory,
+                        isCommunityLoading = false,
+                        isVoteSubmitting = false,
+                        communityError = null,
+                        submittedVote = null,
                     ),
                 )
             }
@@ -946,66 +974,154 @@ class InstallerViewModel(
         )
     }
 
+    private fun resetVirusTotalScan() {
+        scanJob?.cancel()
+        communityJob?.cancel()
+        voteJob?.cancel()
+        pendingAutoInstall = false
+        _localState.update { it.copy(virusTotalScan = VirusTotalScanState()) }
+    }
+
     /**
      * Runs a scan and mirrors the result into UI state. The state is set to SCANNING before the
      * coroutine starts so Strict mode blocks the install button immediately.
      */
-    private fun startScan(
-        data: DataEntity,
-        method: VirusTotalScanMethod,
-        mandatory: Boolean,
-    ) {
+    private fun startScan(data: DataEntity, method: VirusTotalScanMethod, mandatory: Boolean) {
         val packageName = _localState.value.currentPackageName
         val current = uiState.value.virusTotalScan
         scanJob?.cancel()
+        communityJob?.cancel()
+        voteJob?.cancel()
         _localState.update { state ->
             state.copy(
-                virusTotalScan = current.copy(
+                virusTotalScan = VirusTotalScanState(
+                    mode = current.mode,
+                    apiKey = current.apiKey,
+                    networkEnabled = current.networkEnabled,
                     status = VirusTotalScanStatus.SCANNING,
                     method = method,
-                    report = null,
-                    error = null,
                     packageName = packageName,
                     mandatory = mandatory,
                 ),
             )
         }
-
         scanJob = viewModelScope.launch {
             val outcome = try {
-                if (method == VirusTotalScanMethod.HASH) {
-                    scanFileByHash(data)
-                } else {
-                    uploadFileForScan(data)
-                }
+                if (method == VirusTotalScanMethod.HASH) scanFileByHash(data) else uploadFileForScan(data)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 VirusTotalScanOutcome.Failure(
-                    VirusTotalScanError(
-                        kind = VirusTotalErrorKind.UNKNOWN,
-                        message = "The VirusTotal scan could not be completed.",
-                    ),
+                    VirusTotalScanError(VirusTotalErrorKind.UNKNOWN, "The VirusTotal scan could not be completed."),
                 )
             }
-
+            val report = (outcome as? VirusTotalScanOutcome.Success)?.report
             _localState.update { state ->
-                state.copy(
-                    virusTotalScan = state.virusTotalScan.copy(
-                        status = if (outcome is VirusTotalScanOutcome.Success) {
-                            VirusTotalScanStatus.COMPLETED
-                        } else {
-                            VirusTotalScanStatus.FAILED
-                        },
-                        report = (outcome as? VirusTotalScanOutcome.Success)?.report,
-                        error = (outcome as? VirusTotalScanOutcome.Failure)?.error,
-                    ),
-                )
+                if (state.currentPackageName != packageName || state.virusTotalScan.packageName != packageName) {
+                    state
+                } else {
+                    state.copy(
+                        virusTotalScan = state.virusTotalScan.copy(
+                            status = if (report != null) VirusTotalScanStatus.COMPLETED else VirusTotalScanStatus.FAILED,
+                            report = report,
+                            error = (outcome as? VirusTotalScanOutcome.Failure)?.error,
+                        ),
+                    )
+                }
             }
-
+            if (report?.communityScores == null && report?.sha256 != null) loadCommunityScores(report.sha256)
             if (pendingAutoInstall) {
                 pendingAutoInstall = false
                 install()
+            }
+        }
+    }
+
+    private fun loadCommunityScores(sha256: String, afterVote: Boolean = false) {
+        communityJob?.cancel()
+        _localState.update {
+            it.copy(virusTotalScan = it.virusTotalScan.copy(isCommunityLoading = true, communityError = null))
+        }
+        communityJob = viewModelScope.launch {
+            val result = try {
+                getCommunityScores(sha256)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+            updateCommunityScores(sha256, result.getOrNull(), result.exceptionOrNull(), afterVote)
+        }
+    }
+
+    private fun updateCommunityScores(
+        sha256: String,
+        scores: VirusTotalCommunityScores?,
+        error: Throwable?,
+        afterVote: Boolean,
+    ) {
+        _localState.update { state ->
+            val scan = state.virusTotalScan
+            if (scan.report?.sha256 != sha256) return@update state
+            state.copy(
+                virusTotalScan = scan.copy(
+                    isCommunityLoading = false,
+                    report = scores?.let { scan.report.copy(communityScores = it) } ?: scan.report,
+                    communityError = error?.let {
+                        VirusTotalScanError(
+                            kind = if (afterVote) {
+                                VirusTotalErrorKind.VOTE_REFRESH_FAILED
+                            } else {
+                                (it as? VirusTotalException)?.kind ?: VirusTotalErrorKind.COMMUNITY_UNAVAILABLE
+                            },
+                            message = it.message.orEmpty(),
+                        )
+                    },
+                ),
+            )
+        }
+    }
+
+    private fun retryCommunity() {
+        val scan = _localState.value.virusTotalScan
+        if (scan.isCommunityLoading || scan.isVoteSubmitting) return
+        scan.report?.sha256?.let { loadCommunityScores(it) }
+    }
+
+    private fun submitVote(sha256: String, verdict: VirusTotalCommunityVerdict) {
+        if (!uiState.value.virusTotalScan.canVote || _localState.value.virusTotalScan.report?.sha256 != sha256) return
+        voteJob?.cancel()
+        _localState.update {
+            it.copy(virusTotalScan = it.virusTotalScan.copy(isVoteSubmitting = true, communityError = null))
+        }
+        voteJob = viewModelScope.launch {
+            val result = try {
+                voteOnFile(sha256, verdict)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+            _localState.update { state ->
+                val scan = state.virusTotalScan
+                if (scan.report?.sha256 != sha256) return@update state
+                state.copy(
+                    virusTotalScan = scan.copy(
+                        isVoteSubmitting = false,
+                        submittedVote = if (result.isSuccess) verdict else scan.submittedVote,
+                        communityError = result.exceptionOrNull()?.let {
+                            VirusTotalScanError(
+                                (it as? VirusTotalException)?.kind ?: VirusTotalErrorKind.VOTE_FAILED,
+                                it.message.orEmpty(),
+                            )
+                        },
+                    ),
+                )
+            }
+            if (result.isSuccess && _localState.value.virusTotalScan.report?.sha256 == sha256) {
+                toast(R.string.virustotal_vote_submitted)
+                // Read authoritative totals after success; never fabricate an optimistic count.
+                loadCommunityScores(sha256, afterVote = true)
             }
         }
     }
