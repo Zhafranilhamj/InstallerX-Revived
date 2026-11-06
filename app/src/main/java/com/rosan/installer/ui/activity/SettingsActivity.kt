@@ -23,6 +23,7 @@ import com.rosan.installer.domain.settings.model.preferences.ThemeState
 import com.rosan.installer.domain.settings.provider.ThemeStateProvider
 import com.rosan.installer.framework.packageupdate.SelfUpdateRecoveryManager
 import com.rosan.installer.ui.navigation.InstallerNavContainer
+import com.rosan.installer.ui.navigation.Route
 import com.rosan.installer.ui.theme.InstallerTheme
 import com.rosan.installer.ui.theme.LocalWindowLayoutInfo
 import com.rosan.installer.ui.theme.rememberWindowLayoutInfo
@@ -39,6 +40,12 @@ class SettingsActivity :
     companion object {
         // InstallerActivity is singleInstance, so recover into the reusable normal app task
         // before removing the temporary package-update task.
+        const val EXTRA_INITIAL_ROUTE = "initial_route"
+        const val ROUTE_APP_MANAGER = "app_manager"
+        const val ROUTE_LOCAL_SHARE = "local_share"
+        const val ROUTE_SEND_TO_TV = "send_to_tv"
+        const val ROUTE_REMOTE_DOWNLOAD = "remote_download"
+
         fun createSelfUpdateRecoveryIntent(context: Context) = Intent(context, SettingsActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -94,11 +101,19 @@ class SettingsActivity :
                             .fillMaxSize()
                             .background(backgroundColor),
                     ) {
-                        InstallerNavContainer(uiState)
+                        InstallerNavContainer(uiState, initialRoute = initialRoute(intent))
                     }
                 }
             }
         }
+    }
+
+    private fun initialRoute(incoming: Intent): Route = when (incoming.getStringExtra(EXTRA_INITIAL_ROUTE)) {
+        ROUTE_APP_MANAGER -> Route.AppManager
+        ROUTE_LOCAL_SHARE -> Route.LocalShare
+        ROUTE_SEND_TO_TV -> Route.SendToTv
+        ROUTE_REMOTE_DOWNLOAD -> Route.RemoteDownload
+        else -> Route.Main
     }
 
     override fun onNewIntent(intent: Intent) {

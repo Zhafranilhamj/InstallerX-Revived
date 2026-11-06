@@ -346,6 +346,35 @@ fun MiuixPreferredPage(
                     )
                 }
             }
+            item { SmallTitle(stringResource(R.string.tools)) }
+            item {
+                Card(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp),
+                ) {
+                    BasicComponent(
+                        title = stringResource(R.string.app_manager_title),
+                        summary = stringResource(R.string.app_manager_desc),
+                        onClick = { navigator.push(Route.AppManager) },
+                    )
+                    BasicComponent(
+                        title = stringResource(R.string.local_share_title),
+                        summary = stringResource(R.string.local_share_desc),
+                        onClick = { navigator.push(Route.LocalShare) },
+                    )
+                    BasicComponent(
+                        title = stringResource(R.string.send_to_tv_title),
+                        summary = stringResource(R.string.send_to_tv_desc),
+                        onClick = { navigator.push(Route.SendToTv) },
+                    )
+                    BasicComponent(
+                        title = stringResource(R.string.remote_download_title),
+                        summary = stringResource(R.string.remote_download_desc),
+                        onClick = { navigator.push(Route.RemoteDownload) },
+                    )
+                }
+            }
             item { SmallTitle(stringResource(R.string.other)) }
             item {
                 Card(

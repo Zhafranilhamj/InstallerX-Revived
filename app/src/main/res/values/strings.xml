@@ -1047,7 +1047,7 @@
     <string name="virustotal_scan_mode_normal">Normal</string>
     <string name="virustotal_scan_mode_strict">Strict</string>
     <string name="virustotal_scan_mode_off_desc">No scanning.</string>
-    <string name="virustotal_scan_mode_normal_desc">Scanning is optional. Check a file by hash or upload it before installing.</string>
+    <string name="virustotal_scan_mode_normal_desc">Automatically checks each file with a SHA-256 hash lookup (no upload). Reports never block installation; you can still upload manually.</string>
     <string name="virustotal_scan_mode_strict_desc">Scanning is mandatory. The file is uploaded and installation waits for the scan to finish.</string>
     <string name="virustotal_scan_status_title">VirusTotal scan</string>
     <string name="virustotal_scan_button">Scan with VirusTotal</string>
@@ -1056,7 +1056,7 @@
     <string name="virustotal_network_disabled">Network access is off. Enable it in Network settings to scan files.</string>
     <string name="virustotal_scanning_hash">Looking up hash…</string>
     <string name="virustotal_scanning_upload">Uploading and scanning…</string>
-    <string name="virustotal_scan_optional_hint">Scanning is optional. Check the file by hash or upload it for a full scan.</string>
+    <string name="virustotal_scan_optional_hint">A hash lookup runs automatically. You can also upload the file for a full scan. Reports never block installation.</string>
     <string name="virustotal_strict_scan_required">Strict mode requires a scan before installation.</string>
     <string name="virustotal_strict_scan_complete">Scan complete. You can install now.</string>
     <string name="virustotal_strict_scan_in_progress">Wait for the VirusTotal scan to finish before installing.</string>
@@ -1110,4 +1110,88 @@
     <string name="virustotal_vote_submitted">Vote submitted to VirusTotal.</string>
     <string name="virustotal_vote_failed">Couldn\'t save your vote. Check your API key\'s permissions and try again.</string>
     <string name="virustotal_vote_refresh_failed">Your vote was submitted, but community scores couldn\'t be refreshed.</string>
+
+    <!-- OBB deployment -->
+    <string name="obb_deploy_success">%1$d OBB file(s) written for %2$s</string>
+    <string name="obb_deploy_failed">%1$d OBB file(s) could not be written: %2$s</string>
+
+    <!-- Tools -->
+    <string name="tools">Tools</string>
+
+    <!-- App manager -->
+    <string name="app_manager_title">App manager</string>
+    <string name="app_manager_desc">Inspect, sort and batch-uninstall installed apps.</string>
+    <string name="app_manager_search">Search name or package</string>
+    <string name="app_manager_system_apps">System apps</string>
+    <string name="app_manager_descending">Descending</string>
+    <string name="app_manager_sort_name">Name</string>
+    <string name="app_manager_sort_install">Installed</string>
+    <string name="app_manager_sort_update">Updated</string>
+    <string name="app_manager_sort_size">Size</string>
+    <string name="app_manager_sort_used">Last used</string>
+    <string name="app_manager_uninstall">Uninstall (%1$d)</string>
+    <string name="app_manager_clear_log">Clear log</string>
+    <string name="app_manager_loading">Reading installed packages…</string>
+    <string name="app_manager_system">System</string>
+    <string name="app_manager_log">Uninstall log</string>
+    <string name="app_manager_pending">Pending</string>
+    <string name="app_manager_success">Success</string>
+    <string name="app_manager_failed">Failed</string>
+
+    <!-- Local sharing -->
+    <string name="local_share_title">Local sharing</string>
+    <string name="local_share_desc">Serve an upload dashboard to devices on your Wi-Fi.</string>
+    <string name="local_share_intro">Start the built-in HTTP server, then open the address below in a browser on the same network. Uploaded packages open the installer on this device.</string>
+    <string name="local_share_port">Port (1024-65535)</string>
+    <string name="local_share_pin">PIN (optional)</string>
+    <string name="local_share_pin_hint">Leave empty to allow anyone on the local network. 4-8 digits otherwise.</string>
+    <string name="local_share_secure">PIN protection</string>
+    <string name="local_share_start">Start server</string>
+    <string name="local_share_stop">Stop server</string>
+    <string name="local_share_running">Server running</string>
+    <string name="local_share_stopped">Server stopped</string>
+    <string name="local_share_qr">Send to TV QR code</string>
+    <string name="local_share_qr_hint">Scan this code with InstallerX on a phone to push packages to this device.</string>
+    <string name="local_share_saf_folder">Grant Android/obb folder (SAF)</string>
+    <string name="local_share_saf_granted">SAF folder granted: OBB writes can fall back to it.</string>
+    <string name="local_share_saf_missing">No SAF folder granted yet. Direct I/O and Shizuku are tried first.</string>
+    <string name="local_share_received">Received files</string>
+    <string name="local_share_no_files">Nothing received yet.</string>
+    <string name="local_share_channel_name">Local sharing</string>
+    <string name="local_share_channel_desc">Keeps the local package upload server running.</string>
+    <string name="local_share_notification_title">Local sharing is on</string>
+    <string name="local_share_notification_desc">Packages can be uploaded from your local network.</string>
+
+    <!-- Send to TV -->
+    <string name="send_to_tv_title">Send to TV</string>
+    <string name="send_to_tv_desc">Scan a TV QR code and push a package to it.</string>
+    <string name="send_to_tv_intro">Start Local sharing on the TV, scan its QR code, then choose a package to push over the local network.</string>
+    <string name="send_to_tv_scan_qr">Scan TV QR code</string>
+    <string name="send_to_tv_address">TV address (http://192.168.1.5:8765)</string>
+    <string name="send_to_tv_pick_file">Choose a package</string>
+    <string name="send_to_tv_send">Send package</string>
+    <string name="send_to_tv_success">Package sent. Confirm the install on the TV.</string>
+    <string name="send_to_tv_failed">Push failed: %1$s</string>
+    <string name="send_to_tv_invalid_address">Enter a valid http or https address.</string>
+    <string name="send_to_tv_no_file">Choose a package first.</string>
+    <string name="send_to_tv_hint">Both devices must be on the same network. Enter the TV PIN if its dashboard is protected.</string>
+    <string name="qr_scanner_title">Scan QR code</string>
+    <string name="qr_scanner_permission">Camera permission is required to scan a QR code.</string>
+    <string name="qr_scanner_hint">Point the camera at the QR code shown on the TV.</string>
+
+    <!-- Remote downloader and intake -->
+    <string name="remote_download_title">Remote downloader</string>
+    <string name="remote_download_desc">Download packages from a URL and keep history.</string>
+    <string name="remote_download_intro">Downloads respect the in-app network access setting. APK links opened from browsers and messaging apps also arrive here.</string>
+    <string name="remote_download_url">Package URL (http/https)</string>
+    <string name="remote_download_start">Download and install</string>
+    <string name="remote_download_history">Download history</string>
+    <string name="remote_download_clear">Clear</string>
+    <string name="remote_download_install">Install</string>
+    <string name="remote_download_remove">Remove</string>
+    <string name="intake_working">Opening package link…</string>
+    <string name="intake_downloading">Downloading package…</string>
+    <string name="intake_download_failed">Download failed: %1$s</string>
+    <string name="intake_invalid_link">This link is not a supported package URL.</string>
 </resources>
+

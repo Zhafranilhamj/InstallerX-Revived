@@ -1,6 +1,7 @@
 package com.rosan.installer;
 
 import com.rosan.installer.ICommandOutputListener;
+import android.os.ParcelFileDescriptor;
 
 /**
  * Remote privileged operations that need a real user service process.
@@ -31,5 +32,11 @@ interface IPrivilegedService {
      * Parses an APK that is only readable from this privileged process.
      */
     Bundle parsePackageArchive(String path);
+
+    /**
+     * Copies a staged OBB into Android/obb/<packageName>/<fileName> using this process's
+     * shell/root privileges. The source descriptor is owned by the caller and is closed here.
+     */
+    boolean writeObb(in ParcelFileDescriptor source, String packageName, String fileName);
 
 }

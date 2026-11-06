@@ -42,6 +42,21 @@ sealed interface Route : NavKey {
     data object Lab : Route
 
     @Serializable
+    data object AppManager : Route
+
+    @Serializable
+    data object LocalShare : Route
+
+    @Serializable
+    data object SendToTv : Route
+
+    @Serializable
+    data object QrScanner : Route
+
+    @Serializable
+    data object RemoteDownload : Route
+
+    @Serializable
     data object DefaultInstaller : Route
 
     @Serializable

@@ -361,6 +361,45 @@ fun PreferredPage(
                     }
                 }
             }
+            // --- Tools Group ---
+            item {
+                SegmentedColumn(
+                    title = stringResource(R.string.tools),
+                ) {
+                    item {
+                        BaseWidget(
+                            icon = AppIcons.Android,
+                            title = stringResource(R.string.app_manager_title),
+                            description = stringResource(R.string.app_manager_desc),
+                            onClick = { navigator.push(Route.AppManager) },
+                        )
+                    }
+                    item {
+                        BaseWidget(
+                            icon = AppIcons.Share,
+                            title = stringResource(R.string.local_share_title),
+                            description = stringResource(R.string.local_share_desc),
+                            onClick = { navigator.push(Route.LocalShare) },
+                        )
+                    }
+                    item {
+                        BaseWidget(
+                            icon = AppIcons.NetworkSource,
+                            title = stringResource(R.string.send_to_tv_title),
+                            description = stringResource(R.string.send_to_tv_desc),
+                            onClick = { navigator.push(Route.SendToTv) },
+                        )
+                    }
+                    item {
+                        BaseWidget(
+                            icon = AppIcons.Download,
+                            title = stringResource(R.string.remote_download_title),
+                            description = stringResource(R.string.remote_download_desc),
+                            onClick = { navigator.push(Route.RemoteDownload) },
+                        )
+                    }
+                }
+            }
             // --- Other Settings Group ---
             item {
                 SegmentedColumn(

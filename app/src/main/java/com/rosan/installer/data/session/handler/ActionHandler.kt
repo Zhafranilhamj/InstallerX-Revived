@@ -30,12 +30,14 @@ import com.rosan.installer.domain.engine.model.packageinfo.AppEntity
 import com.rosan.installer.domain.engine.model.packageinfo.PackageAnalysisResult
 import com.rosan.installer.domain.engine.model.source.AnalysisMaterializationKey
 import com.rosan.installer.domain.engine.model.source.AnalysisMaterializationPolicy
+import com.rosan.installer.domain.engine.model.source.DataEntity
 import com.rosan.installer.domain.engine.usecase.AnalyzePackageUseCase
 import com.rosan.installer.domain.engine.usecase.ApproveSessionUseCase
 import com.rosan.installer.domain.engine.usecase.ClearAppIconCacheUseCase
 import com.rosan.installer.domain.engine.usecase.GetSessionConfirmationDetailsUseCase
 import com.rosan.installer.domain.engine.usecase.ProcessInstallationUseCase
 import com.rosan.installer.domain.engine.usecase.ProcessUninstallUseCase
+import com.rosan.installer.domain.obb.repository.ObbDeploymentRepository
 import com.rosan.installer.domain.packageupdate.model.PendingSelfUpdateHistory
 import com.rosan.installer.domain.privileged.provider.ShellExecutionProvider
 import com.rosan.installer.domain.session.model.ConfirmationRequest
@@ -105,6 +107,7 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
     private val processUninstall by inject<ProcessUninstallUseCase>()
     private val getSessionConfirmationDetails by inject<GetSessionConfirmationDetailsUseCase>()
     private val approveSession by inject<ApproveSessionUseCase>()
+    private val obbDeploymentRepository by inject<ObbDeploymentRepository>()
 
     // Cache directory
     private val cacheDirectory = File(context.cacheDir, "installer_sessions/$sessionId")
@@ -517,6 +520,10 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
                     val tempResults = listOf(targetResult.copy(appEntities = entitiesToInstall))
 
                     runWithSelfUpdateRecovery(tempResults) {
+                        deployObbForInstall(
+                            packageNames = appEntities.map { it.app.packageName }.toSet(),
+                            data = session.data,
+                        )
                         // Perform install
                         processInstallation(
                             config = session.config,
@@ -562,6 +569,29 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
     }
 
     /**
+     * Extracts OBB payloads from XAPK/APKM containers and standalone OBB files attached to the
+     * APK install. Deployment is best effort: a failed OBB copy must never abort the APK install.
+     */
+    private suspend fun deployObbForInstall(packageNames: Set<String>, data: List<DataEntity>) {
+        if (packageNames.isEmpty()) return
+        val paths = data.mapNotNull { (it.getSourceTop() as? DataEntity.FileEntity)?.path }.distinct()
+        if (paths.isEmpty()) return
+        for (packageName in packageNames) {
+            val outcome = runCatching { obbDeploymentRepository.deploy(packageName, paths) }
+                .onFailure { Timber.w(it, "OBB deployment failed for $packageName") }
+                .getOrNull() ?: continue
+            if (!outcome.hasPayloads) continue
+            val message = if (outcome.success) {
+                context.getString(R.string.obb_deploy_success, outcome.results.size, packageName)
+            } else {
+                context.getString(R.string.obb_deploy_failed, outcome.results.size, outcome.summary())
+            }
+            Timber.i("OBB deployment for $packageName: ${outcome.summary()}")
+            session.toastEvents.tryEmit(message)
+        }
+    }
+
+    /**
      * Finds the [PackageAnalysisResult] for a given [SelectInstallEntity].
      * Returns null if not found.
      * @param target The [SelectInstallEntity] to search for.
@@ -578,6 +608,13 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
      */
     private suspend fun performInstallLogic() {
         Timber.d("[id=$sessionId] install: Starting installation process via UseCase.")
+
+        deployObbForInstall(
+            packageNames = session.analysisResults
+                .flatMap { result -> result.appEntities.filter { it.selected }.map { it.app.packageName } }
+                .toSet(),
+            data = session.data,
+        )
 
         runWithSelfUpdateRecovery(session.analysisResults) {
             processInstallation(
