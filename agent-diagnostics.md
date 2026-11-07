@@ -1,8 +1,8 @@
 # Verification diagnostics
 
-Commit: 27db819420903b479a739d455fb594ef0d38d219
+Commit: f910e4d350e18dd40b854244a571c748968cdc78
 Formatting outcome: success
-Tests outcome: failure
+Tests outcome: success
 
 ## apksig probe
 ```
@@ -41,7 +41,7 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :spotlessKotlinGradle
 > Task :spotlessKotlinGradleApply
 > Task :spotlessApply
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/format-1794063406612.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/format-1794067029082.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
 
@@ -51,7 +51,7 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 1m 17s
+BUILD SUCCESSFUL in 1m 21s
 13 actionable tasks: 9 executed, 4 from cache
 ```
 
@@ -78,9 +78,9 @@ Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradl
 No custom signing info. Debug build will use the default debug keystore.
 No custom signing info. Release build will use the default debug keystore.
 
-> Task :app:preBuild UP-TO-DATE
 > Task :hidden-api:preBuild UP-TO-DATE
 > Task :app-process:preBuild UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
 > Task :app:preUnstableDebugBuild UP-TO-DATE
 > Task :hidden-api:preDebugBuild UP-TO-DATE
 > Task :app-process:preDebugBuild UP-TO-DATE
@@ -94,37 +94,37 @@ No custom signing info. Release build will use the default debug keystore.
 > Task :app-process:generateDebugResources FROM-CACHE
 > Task :app-process:packageDebugResources
 > Task :app-process:compileDebugAidl
-> Task :hidden-api:javaPreCompileDebug
-> Task :app-process:javaPreCompileDebug FROM-CACHE
+> Task :app-process:javaPreCompileDebug
+> Task :hidden-api:javaPreCompileDebug FROM-CACHE
 > Task :app-process:writeDebugAarMetadata
 > Task :app-process:extractDeepLinksDebug
 > Task :app-process:parseDebugLocalResources
 > Task :hidden-api:parseDebugLocalResources
+> Task :app-process:processDebugManifest
 > Task :app-process:generateDebugRFile
 > Task :hidden-api:generateDebugRFile
 > Task :app-process:mapDebugSourceSetPaths
 > Task :hidden-api:compileDebugKotlin NO-SOURCE
-> Task :app-process:processDebugManifest
 > Task :app-process:compileDebugLibraryResources
 > Task :app:prepareLibraryDefinitionsUnstableDebug
 > Task :app:extractUnstableDebugSupportedLocales
 > Task :app:mapUnstableDebugSourceSetPaths
-> Task :app:generateUnstableDebugResources
 > Task :app:generateUnstableDebugLocaleConfig
+> Task :app:generateUnstableDebugResources
 > Task :app:compileUnstableDebugAidl
-> Task :app:processUnstableDebugNavigationResources
 > Task :hidden-api:compileDebugJavaWithJavac
 > Task :hidden-api:bundleLibCompileToJarDebug
 > Task :app-process:compileDebugKotlin NO-SOURCE
 > Task :app:packageUnstableDebugResources
-> Task :app:javaPreCompileUnstableDebug
-> Task :app:parseUnstableDebugLocalResources
 > Task :app-process:compileDebugJavaWithJavac
 > Task :app-process:bundleLibCompileToJarDebug
+> Task :app:processUnstableDebugNavigationResources
 > Task :app-process:processDebugJavaRes NO-SOURCE
 > Task :app-process:bundleLibRuntimeToJarDebug
-> Task :app:compileUnstableDebugNavigationResources
+> Task :app:javaPreCompileUnstableDebug
+> Task :app:parseUnstableDebugLocalResources
 > Task :app:checkUnstableDebugAarMetadata
+> Task :app:compileUnstableDebugNavigationResources
 > Task :app:generateUnstableDebugRFile
 > Task :app:mergeUnstableDebugResources
 > Task :app:createUnstableDebugCompatibleScreenManifests
@@ -152,30 +152,10 @@ w: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/src/test/j
 > Task :app:compileUnstableDebugUnitTestJavaWithJavac NO-SOURCE
 > Task :app:copyRoomSchemas NO-SOURCE
 > Task :app:processUnstableDebugUnitTestJavaRes
-
 > Task :app:testUnstableDebugUnitTest
-
-LocalHttpServerTest > upload of exactly the size limit is accepted FAILED
-    java.lang.AssertionError at LocalHttpServerTest.kt:127
-
-PackageLinkPolicyTest > accepts container links that carry a query string FAILED
-    java.lang.AssertionError at PackageLinkPolicyTest.kt:33
-
-307 tests completed, 2 failed
-
-> Task :app:testUnstableDebugUnitTest FAILED
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/tests-1794063470465.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/tests-1794067105194.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
-
-FAILURE: Build failed with an exception.
-
-* What went wrong:
-Execution failed for task ':app:testUnstableDebugUnitTest'.
-> There were failing tests. See the report at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/app/build/reports/tests/testUnstableDebugUnitTest/index.html
-
-* Try:
-> Run with --scan to get full insights from a Build Scan (powered by Develocity).
 
 Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
 
@@ -183,12 +163,10 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 1m 58s
+BUILD SUCCESSFUL in 2m 14s
 66 actionable tasks: 53 executed, 4 from cache, 9 up-to-date
 ```
 
 ## failing test methods
 ```
-    <failure message="java.lang.AssertionError: https://example.com/get?file=app.apk" type="java.lang.AssertionError">java.lang.AssertionError: https://example.com/get?file=app.apk
-    <failure message="java.lang.AssertionError: expected:&lt;200&gt; but was:&lt;413&gt;" type="java.lang.AssertionError">java.lang.AssertionError: expected:&lt;200&gt; but was:&lt;413&gt;
 ```
