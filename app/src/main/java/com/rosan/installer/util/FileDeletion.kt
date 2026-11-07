@@ -9,8 +9,6 @@ import timber.log.Timber
 
 private const val DELETE_TAG = "DELETE_PATH"
 
-private val ALLOWED_DELETE_PREFIXES = emptyList<String>() // populated per-context
-
 fun deletePaths(context: Context, paths: List<String>) {
     // Allowlist: only delete inside app-private dirs, Downloads, cache, external files
     val allowedRoots = listOfNotNull(
@@ -22,7 +20,8 @@ fun deletePaths(context: Context, paths: List<String>) {
         runCatching { File("/sdcard/Download").canonicalFile }.getOrNull(),
     )
     for (path in paths) {
-        val file = runCatching { File(path).canonicalFile }.getOrNull() ?: run {
+        val file = runCatching { File(path).canonicalFile }.getOrNull()
+        if (file == null) {
             Timber.tag(DELETE_TAG).w("Invalid path skipped: $path")
             continue
         }

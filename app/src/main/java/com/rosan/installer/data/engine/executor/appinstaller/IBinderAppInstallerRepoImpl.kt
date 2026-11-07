@@ -50,10 +50,7 @@ import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.domain.settings.repository.BooleanSetting
 import com.rosan.installer.framework.privileged.core.execution.authorization.requireDhizukuPermissionGranted
 import com.rosan.installer.util.pm.isFreshInstallCandidate
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import timber.log.Timber
 
 abstract class IBinderAppInstallerRepoImpl(

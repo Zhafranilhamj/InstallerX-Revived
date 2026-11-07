@@ -48,13 +48,10 @@ class AutoCacheSweeper(private val context: Context) {
                 fun clearFileSafe(file: File, isRoot: Boolean = false): Boolean {
                     if (!file.exists()) return true
                     if (shouldSkipByName(file)) return false
-                    // Never delete protected staging dirs at root level; sweep contents instead
+                    // Never delete protected staging dirs at root level; sweep their stale children instead
                     if (isRoot && protectedDirNames.contains(file.name)) {
-                        // For protected dirs, only sweep children older than cutoff
-                        val children = file.listFiles() ?: return false
-                        var clearedCount = 0
-                        children.forEach { child ->
-                            if (child.lastModified() < cutoff && clearFileSafe(child)) clearedCount++
+                        file.listFiles()?.forEach { child ->
+                            if (child.lastModified() < cutoff) clearFileSafe(child)
                         }
                         return false
                     }

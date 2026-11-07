@@ -3,9 +3,8 @@
 package com.rosan.installer.ui.page.main.installer
 
 import androidx.compose.ui.graphics.Color
-
-private object NoErrorState : Throwable("No error", null, false, false)
 import androidx.compose.ui.graphics.ImageBitmap
+import com.rosan.installer.domain.engine.model.error.NoError
 import com.rosan.installer.domain.engine.model.packageinfo.PackageAnalysisResult
 import com.rosan.installer.domain.session.model.UninstallInfo
 import com.rosan.installer.domain.settings.model.app.NamedPackage
@@ -50,7 +49,7 @@ data class InstallerState(
     val uiUninstallInfo: UninstallInfo? = null,
 
     // Error State - use None sentinel
-    val error: Throwable = NoErrorState,
+    val error: Throwable = NoError,
 ) {
     /**
      * Determines if the dialog can be dismissed by tapping the scrim.
