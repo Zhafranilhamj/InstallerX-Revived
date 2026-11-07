@@ -287,6 +287,27 @@ class InstallerService : Service() {
 
     private fun stopServiceForcefully() {
         Timber.w("Force destroying service.")
+        // Closing the sessions first is what keeps the singleton manager consistent: cancelling
+        // the handler coroutines below would otherwise leave live repositories behind with a dead
+        // action channel, and the installer UI would freeze on its next action.
+        val activeIds = synchronized(sessionScopes) { sessionScopes.keys.toList() }
+        if (activeIds.isEmpty()) {
+            sessionManager.getAllSessions().forEach { session ->
+                runCatching {
+                    session.cancel()
+                    session.close()
+                }.onFailure { error -> Timber.w(error, "Could not close session ${session.id}") }
+            }
+        } else {
+            activeIds.forEach { id ->
+                sessionManager.get(id)?.let { session ->
+                    runCatching {
+                        session.cancel()
+                        session.close()
+                    }.onFailure { error -> Timber.w(error, "Could not close session $id") }
+                }
+            }
+        }
         // Clean up all scopes
         synchronized(sessionScopes) {
             sessionScopes.values.forEach { it.cancel() }

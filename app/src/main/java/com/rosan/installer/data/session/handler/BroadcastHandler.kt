@@ -27,12 +27,23 @@ class BroadcastHandler(override val scope: CoroutineScope, override val session:
     companion object {
         private const val ACTION = "installer.broadcast.action"
         private const val KEY_NAME = "name"
+        private const val MAX_REQUEST_CODES = 4_096
+
+        /**
+         * Stable-but-unique PendingIntent request codes.
+         *
+         * A hash of the session id collided across sessions (worse: `id.hashCode()` alone collides
+         * for the same session), so two different intents could silently overwrite each other. Codes
+         * are allocated once per (session, name) pair and reused, keeping cancellation working.
+         */
+        private val requestCodes = java.util.concurrent.ConcurrentHashMap<Pair<String, Int>, Int>()
+        private val nextRequestCode = java.util.concurrent.atomic.AtomicInteger(4_100)
 
         private fun getRequestCode(installer: InstallerSessionRepository, name: Name): Int {
-            // Use stable hash to avoid PendingIntent collisions; combine with name ordinal
-            var h = installer.id.hashCode()
-            h = 31 * h + name.ordinal
-            return h
+            if (requestCodes.size > MAX_REQUEST_CODES) requestCodes.clear()
+            return requestCodes.getOrPut(installer.id to name.ordinal) {
+                nextRequestCode.incrementAndGet()
+            }
         }
 
         fun openIntent(context: Context, installer: InstallerSessionRepository) = Intent()

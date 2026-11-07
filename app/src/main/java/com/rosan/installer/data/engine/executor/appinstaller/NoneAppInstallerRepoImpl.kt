@@ -17,6 +17,7 @@ import com.rosan.installer.domain.engine.model.install.InstallMetadata
 import com.rosan.installer.domain.engine.model.install.InstallPhase
 import com.rosan.installer.domain.engine.model.install.InstallWriteProgress
 import com.rosan.installer.domain.engine.model.install.shouldAutoDeleteSource
+import com.rosan.installer.domain.engine.model.packageinfo.SplitNamePolicy
 import com.rosan.installer.domain.engine.model.install.sourcePath
 import com.rosan.installer.domain.engine.repository.AppInstallerRepository
 import com.rosan.installer.domain.privileged.model.PostInstallTaskInfo
@@ -84,6 +85,12 @@ class NoneAppInstallerRepoImpl(
                 var stagingProgressSupported =
                     totalBytes?.let { updateStagingProgress(session, 0f) } ?: false
                 for (entity in entities) {
+                    if (!SplitNamePolicy.isValidEntryName(entity.name)) {
+                        throw InstallException(
+                            InstallErrorType.INVALID_APK,
+                            "Unsafe session entry name: ${entity.name.take(64)}",
+                        )
+                    }
                     val entitySize = entity.data.getSize()
                     session.openWrite(
                         entity.name,

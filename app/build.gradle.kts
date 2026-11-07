@@ -160,8 +160,8 @@ aboutLibraries {
     }
 }
 
-// Use the apksig implementation bundled with the lowest installed Build Tools version that
-// supports the signature schemes handled by the app. Newer Build Tools retain this support.
+// apksig is consumed from Maven (see the dependency block); this build-tools lookup is kept only
+// as an opt-in fallback for fully offline environments: -PuseLocalApksigJar=true.
 private val minApksignerBuildTools = "37.0.0"
 
 private fun buildToolsVersionParts(version: String): List<Int> = version
@@ -195,6 +195,11 @@ val apksignerJar = androidComponents.sdkComponents.sdkDirectory.map { sdkDirecto
     selectApksignerJar(sdkDirectory.asFile)
 }
 
+// Standard builds resolve `com.android.tools.build:apksig` from Google Maven. The SDK jar is only
+// wired in when explicitly requested, so a modern build-tools installation is no longer a
+// prerequisite for compiling the app.
+val useLocalApksigJar = (project.findProperty("useLocalApksigJar") as String?)?.toBoolean() == true
+
 room3 {
     // Specify the schema directory
     schemaDirectory("$projectDir/schemas")
@@ -209,7 +214,11 @@ dependencies {
     implementation(libs.commons.compress)
     implementation(libs.xz)
     implementation(libs.androidx.profileinstaller)
-    implementation(files(apksignerJar))
+    if (useLocalApksigJar) {
+        implementation(files(apksignerJar))
+    } else {
+        implementation(libs.apksig)
+    }
     "baselineProfile"(project(":baselineprofile"))
     compileOnly(project(":hidden-api"))
     implementation(libs.androidx.core)

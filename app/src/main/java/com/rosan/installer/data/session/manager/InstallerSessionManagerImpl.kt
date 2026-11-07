@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.rosan.installer.data.session.repository.InstallerSessionRepositoryImpl
 import com.rosan.installer.domain.session.repository.InstallerSessionManager
+import com.rosan.installer.domain.session.model.ProgressEntity
 import com.rosan.installer.domain.session.repository.InstallerSessionRepository
 import com.rosan.installer.framework.service.InstallerService
 import java.util.UUID
@@ -63,7 +64,36 @@ class InstallerSessionManagerImpl(private val context: Context) : InstallerSessi
      * Returns a snapshot of all active sessions.
      * Crucial for the Service to restore handlers if the process was restarted.
      */
-    fun getAllSessions(): List<InstallerSessionRepositoryImpl> = sessions.values.toList()
+    fun getAllSessions(): List<InstallerSessionRepositoryImpl> {
+        sweepClosedSessions()
+        return sessions.values.toList()
+    }
+
+    /**
+     * Drops sessions that asked to be closed and already reached a terminal progress state.
+     *
+     * Closing is normally done by the repository's own `onClose` callback. A session that only
+     * called `prepareClose()` (activity finishing, notification dismissed) never runs that
+     * callback, so without this sweep it would sit in memory with a finished scope forever.
+     */
+    fun sweepClosedSessions() {
+        val iterator = sessions.entries.iterator()
+        while (iterator.hasNext()) {
+            val (id, session) = iterator.next()
+            if (session.closeRequested.value && session.progress.value.isTerminalForSweep()) {
+                Timber.d("InstallerSessionManager: sweeping closed session $id")
+                iterator.remove()
+            }
+        }
+    }
+
+    private fun ProgressEntity.isTerminalForSweep(): Boolean = this is ProgressEntity.Finish ||
+        this is ProgressEntity.InstallSuccess ||
+        this is ProgressEntity.InstallCompleted ||
+        this is ProgressEntity.InstallFailed ||
+        this is ProgressEntity.InstallAnalysedFailed ||
+        this is ProgressEntity.InstallAnalysedUnsupported ||
+        this is ProgressEntity.InstallResolvedFailed
 
     override fun enqueueForegroundInstall(intent: Intent) {
         synchronized(foregroundInstallQueue) {

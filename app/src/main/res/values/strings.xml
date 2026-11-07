@@ -1198,5 +1198,11 @@
     <string name="intake_confirm_action">Download</string>
     <string name="intake_cancel_action">Cancel</string>
     <string name="intake_cancelled">Download cancelled.</string>
+    <!-- PackageInstaller user-action prompts -->
+    <string name="user_action_channel_name">Install confirmation</string>
+    <string name="user_action_channel_desc">Requests that need a tap before the platform continues.</string>
+    <string name="user_action_notification_title">Confirmation required</string>
+    <string name="user_action_notification_desc">Tap to continue installing %1$s.</string>
+    <string name="user_action_notification_desc_unknown">Tap to continue the pending operation.</string>
 </resources>
 

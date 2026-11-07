@@ -42,12 +42,18 @@ class InstallerSessionRepositoryImpl(override val id: String, private val onClos
     override var sourceUris: List<String> by mutableStateOf(emptyList())
     override var referrerUri: String? by mutableStateOf(null)
     override var analysisResults: List<PackageAnalysisResult> by mutableStateOf(emptyList())
-    override val progress: MutableSharedFlow<ProgressEntity> = MutableStateFlow(ProgressEntity.Ready)
+    // Declared as the concrete type it actually is: a StateFlow (single latest value) rather than a
+    // replay-less shared flow. The old signature misled readers into expecting every intermediate
+    // progress update to be observed.
+    override val progress: MutableStateFlow<ProgressEntity> = MutableStateFlow(ProgressEntity.Ready)
     override val toastEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 16)
 
     // Actions are single-consumer commands. State that must survive collector restarts lives in
     // StateFlow properties below instead of being replayed as commands.
-    private val actionChannel = Channel<Action>(Channel.BUFFERED)
+    // UNLIMITED: user dispatched actions must never be dropped while a slow analysis is running.
+    // The channel is only written from the UI/service and drained by a single consumer, so unbounded
+    // growth is bounded by actual user input.
+    private val actionChannel = Channel<Action>(Channel.UNLIMITED)
     val action: Flow<Action> = actionChannel.receiveAsFlow()
 
     override val background: MutableSharedFlow<Boolean> = MutableStateFlow(false)

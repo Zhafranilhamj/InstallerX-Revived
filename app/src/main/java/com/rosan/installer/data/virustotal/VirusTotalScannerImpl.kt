@@ -76,13 +76,20 @@ class VirusTotalScannerImpl(
             )
         }
         try {
-            // This endpoint also works for accounts that cannot query a particular file's scores.
-            apiGet(apiKey, "/users/$apiKey/overall_quotas", "while validating the API key")
+            // The API key travels in the `x-apikey` header only. `/users/{id}/overall_quotas`
+            // required the raw key in the URL path, which leaked it into proxy logs, crash reports
+            // and any intermediate tooling. A well-known public address proves authentication
+            // without consuming the file quota.
+            apiGet(apiKey, VALIDATION_PATH, "while validating the API key")
             Result.success(Unit)
         } catch (error: CancellationException) {
             throw error
         } catch (error: VirusTotalException) {
-            Result.failure(error)
+            // A missing report or an exhausted quota still proves VirusTotal accepted the key.
+            when (error.kind) {
+                VirusTotalErrorKind.NOT_FOUND, VirusTotalErrorKind.QUOTA_EXCEEDED -> Result.success(Unit)
+                else -> Result.failure(error)
+            }
         }
     }
 
@@ -409,6 +416,9 @@ class VirusTotalScannerImpl(
         const val BASE_URL = "https://www.virustotal.com/api/v3"
         const val GUI_BASE_URL = "https://www.virustotal.com/gui"
         const val API_KEY_HEADER = "x-apikey"
+
+        /** Header-authenticated endpoint used to validate a key without putting it in the URL. */
+        const val VALIDATION_PATH = "/ip_addresses/8.8.8.8"
         const val UPLOAD_BUFFER_SIZE = 64 * 1024
         const val POLL_INTERVAL_MS = 20_000L
         const val HTTP_OK = 200

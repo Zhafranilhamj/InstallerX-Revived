@@ -32,8 +32,10 @@ class SecretCodeReceiver : BroadcastReceiver() {
                 // we must set the FLAG_ACTIVITY_NEW_TASK flag.
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            // Start the activity.
-            context.startActivity(i)
+            // Start the activity. Android 10+ can reject background activity starts; that must not
+            // crash the receiver (and take the whole process down with it).
+            runCatching { context.startActivity(i) }
+                .onFailure { error -> Timber.w(error, "Could not open settings from the secret code receiver") }
         } else {
             // Log a warning if the action does not match.
             Timber.Forest.w("Received an intent with unexpected action: ${intent.action}")

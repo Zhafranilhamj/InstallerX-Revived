@@ -1178,6 +1178,12 @@
     <string name="intake_confirm_action">下载</string>
     <string name="intake_cancel_action">取消</string>
     <string name="intake_cancelled">已取消下载。</string>
+    <!-- 安装器需要用户确认的提示 -->
+    <string name="user_action_channel_name">安装确认</string>
+    <string name="user_action_channel_desc">需要点击后系统才会继续的请求。</string>
+    <string name="user_action_notification_title">需要确认</string>
+    <string name="user_action_notification_desc">点击以继续安装 %1$s。</string>
+    <string name="user_action_notification_desc_unknown">点击以继续待处理的操作。</string>
 
     <!--
         Technical / brand strings that stay in English in values/strings.xml (translatable="false").

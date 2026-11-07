@@ -16,13 +16,13 @@ import com.rosan.installer.core.device.model.Manufacturer
 import com.rosan.installer.core.env.DeviceConfig
 import com.rosan.installer.core.reflection.ReflectionProvider
 import com.rosan.installer.core.reflection.invoke
-import com.rosan.installer.core.resParser.parser.AxmlTreeParser
 import com.rosan.installer.data.engine.signature.PendingApkSignatureAnalyzer
 import com.rosan.installer.domain.engine.exception.AnalyseException
 import com.rosan.installer.domain.engine.exception.DescriptorAnalysisUnsupportedException
 import com.rosan.installer.domain.engine.model.AnalyseExtraEntity
 import com.rosan.installer.domain.engine.model.error.AnalyseErrorType
 import com.rosan.installer.domain.engine.model.packageinfo.AppEntity
+import com.rosan.installer.domain.engine.model.packageinfo.SplitNamePolicy
 import com.rosan.installer.domain.engine.model.packageinfo.XposedModuleInfo
 import com.rosan.installer.domain.engine.model.source.AnalysisMaterializationPolicy
 import com.rosan.installer.domain.engine.model.source.DataEntity
@@ -603,6 +603,14 @@ class ApkParser(
                 installLocation = installLocation,
             )
         } else {
+            // A hostile manifest could put a path traversal sequence in `split`, which would end up
+            // in the session entry name. Reject instead of silently installing under a weird key.
+            if (!SplitNamePolicy.isValid(splitName)) {
+                throw AnalyseException(
+                    AnalyseErrorType.CORRUPTED_ARCHIVE,
+                    "Invalid split name in AndroidManifest.xml: ${splitName.take(64)}",
+                )
+            }
             val metadata = splitName.parseSplitMetadata()
             AppEntity.SplitEntity(
                 packageName = packageName,
@@ -628,14 +636,14 @@ class ApkParser(
     }
 
     private fun XmlResourceParser.getAndroidAttributeValue(name: String, resId: Int): String? {
-        getAttributeValue(AxmlTreeParser.ANDROID_NAMESPACE, name)?.let { return it }
+        getAttributeValue(AndroidManifestNames.ANDROID_NAMESPACE, name)?.let { return it }
         getAttributeValue(null, name)?.let { return it }
         val index = findAndroidAttributeIndex(name, resId)
         return if (index >= 0) getAttributeValue(index) else null
     }
 
     private fun XmlResourceParser.getAndroidAttributeResourceValue(name: String, resId: Int): Int {
-        val namespaced = getAttributeResourceValue(AxmlTreeParser.ANDROID_NAMESPACE, name, ResourcesCompat.ID_NULL)
+        val namespaced = getAttributeResourceValue(AndroidManifestNames.ANDROID_NAMESPACE, name, ResourcesCompat.ID_NULL)
         if (namespaced != ResourcesCompat.ID_NULL) return namespaced
         val nonNamespaced = getAttributeResourceValue(null, name, ResourcesCompat.ID_NULL)
         if (nonNamespaced != ResourcesCompat.ID_NULL) return nonNamespaced
@@ -644,7 +652,7 @@ class ApkParser(
     }
 
     private fun XmlResourceParser.getAndroidAttributeIntValue(name: String, resId: Int, defaultValue: Int): Int {
-        val namespaced = getAttributeIntValue(AxmlTreeParser.ANDROID_NAMESPACE, name, defaultValue)
+        val namespaced = getAttributeIntValue(AndroidManifestNames.ANDROID_NAMESPACE, name, defaultValue)
         if (namespaced != defaultValue) return namespaced
         val nonNamespaced = getAttributeIntValue(null, name, defaultValue)
         if (nonNamespaced != defaultValue) return nonNamespaced
@@ -732,4 +740,9 @@ private fun DataEntity.FileEntity.apkLogContext(): String = buildString {
         append(", rangeLength=")
         append(this@apkLogContext.length)
     }
+}
+
+/** Manifest constants that used to live in the unused `core/resParser` package. */
+internal object AndroidManifestNames {
+    const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
 }

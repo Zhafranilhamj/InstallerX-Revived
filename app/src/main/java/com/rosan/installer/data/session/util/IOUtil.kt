@@ -97,7 +97,9 @@ suspend fun transferWithProgress(
                 // Note: We must add sourceOffset to handle assets embedded in other files (e.g., APKs).
                 val transferred = src.transferTo(sourceOffset + position, count, dst)
 
-                if (transferred == 0L) break
+                // transferTo() returning 0 without reaching the end means the source shrank or the
+                // descriptor cannot be read further. Silently breaking here used to report 100%.
+                if (transferred <= 0L) break
 
                 position += transferred
 
@@ -108,6 +110,11 @@ suspend fun transferWithProgress(
                     lastEmitTime = now
                     nextEmit = position + (chunkSize / 2)
                 }
+            }
+            // Never report success for a short copy: the caller must fall back or surface an error
+            // instead of installing a truncated package.
+            check(position == totalSize) {
+                "Short copy: transferred $position of $totalSize bytes"
             }
             if (totalSize > 0) progressFlow.emit(ProgressEntity.InstallPreparing(1f))
         }
