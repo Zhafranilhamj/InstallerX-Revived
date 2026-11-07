@@ -482,7 +482,8 @@ class OkHttpNetworkResolver(
         }
 
         val maxThreadsByChunk = max(1, (fileSize / MIN_CHUNK_SIZE).toInt())
-        return min(adjustedCount, maxThreadsByChunk)
+        val capped = min(adjustedCount, maxThreadsByChunk)
+        return capped.coerceIn(1, 6)
     }
 
     private suspend fun downloadMultiThreaded(
@@ -535,7 +536,17 @@ class OkHttpNetworkResolver(
             }
 
             val body = response.body
+            // Verify content range matches requested
+            val contentRange = response.header("Content-Range")
+            if (contentRange != null) {
+                val expected = range.end - range.start + 1
+                val rangeInfo = ContentRange.parse(contentRange)
+                if (rangeInfo != null && rangeInfo.length() != expected) {
+                    throw IOException("Chunk size mismatch: expected $expected got ${rangeInfo.length()}")
+                }
+            }
 
+            var writtenForChunk = 0L
             RandomAccessFile(destFile, "rw").use { raf ->
                 raf.seek(range.start)
 
@@ -545,6 +556,7 @@ class OkHttpNetworkResolver(
 
                 while (input.read(buffer).also { bytesRead = it } != -1) {
                     raf.write(buffer, 0, bytesRead)
+                    writtenForChunk += bytesRead
 
                     val currentTotal = downloadedTotal.addAndGet(bytesRead.toLong())
 
@@ -563,6 +575,11 @@ class OkHttpNetworkResolver(
                     }
                 }
             }
+            val expectedBytes = range.end - range.start + 1
+            if (writtenForChunk != expectedBytes) {
+                throw IOException("Chunk incomplete: expected $expectedBytes got $writtenForChunk for ${range.start}-${range.end}")
+            }
+            if (writtenForChunk == 0L) throw IOException("Empty chunk response for ${range.start}-${range.end}")
         }
     }
 

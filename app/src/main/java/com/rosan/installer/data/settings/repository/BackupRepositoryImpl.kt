@@ -293,9 +293,15 @@ class BackupRepositoryImpl(
         return SettingsWriteResult(restored = restored, ignored = ignored)
     }
 
+    // Sensitive keys excluded from plaintext backups
+    private val REDACTED_KEYS = setOf(
+        AppDataStore.VIRUSTOTAL_API_KEY.name,
+    )
+
     private fun Preferences.toBackupSettings(): List<BackupSettingEntry> {
         val supportedKeys = AppDataStore.supportedKeys
         return asMap().mapNotNull { (key, value) ->
+            if (key.name in REDACTED_KEYS) return@mapNotNull null
             val supportedKey = supportedKeys[key.name] ?: return@mapNotNull null
             when (supportedKey.type) {
                 AppDataStore.PreferenceValueType.STRING -> (value as? String)?.let {

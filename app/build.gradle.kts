@@ -78,6 +78,14 @@ android {
             }
             vcsInfo.include = false
             optimization.enable = true
+            optimization.keepRules.files(
+                file("src/main/keepRules/android-components.keep"),
+                file("src/main/keepRules/apksig.keep"),
+                file("src/main/keepRules/app-process.keep"),
+                file("src/main/keepRules/ignore-warnings.keep"),
+                file("src/main/keepRules/privileged-installer.keep"),
+                file("src/main/keepRules/installerx-app.keep"),
+            )
         }
         create("nonMinifiedRelease") {
             signingConfig = if (hasCustomSigning) {

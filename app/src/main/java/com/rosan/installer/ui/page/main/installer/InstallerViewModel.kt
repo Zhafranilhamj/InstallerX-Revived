@@ -753,6 +753,11 @@ class InstallerViewModel(
     }.toMap()
 
     override fun onCleared() {
+        autoInstallJob?.cancel()
+        collectRepoJob?.cancel()
+        settingsLoadingJob.cancel()
+        iconJobs.values.forEach { it.cancel() }
+        iconJobs.clear()
         scanJob?.cancel()
         communityJob?.cancel()
         voteJob?.cancel()

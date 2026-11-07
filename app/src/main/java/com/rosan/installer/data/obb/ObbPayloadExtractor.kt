@@ -26,23 +26,34 @@ class ObbPayloadExtractor(private val context: Context) {
         val payloads = mutableListOf<ObbPayload>()
         val seen = mutableSetOf<Pair<String, String>>()
 
-        sourcePaths.distinct().forEach { path ->
-            val source = File(path)
-            if (!source.isFile) return@forEach
-            when {
-                source.extension.equals("obb", ignoreCase = true) -> {
-                    val fileName = ObbPathPolicy.safeFileName(source.name) ?: return@forEach
-                    val owner = ObbPathPolicy.packageNameFromFileName(fileName) ?: packageName
-                    if (!ObbPathPolicy.isValidPackageName(owner)) return@forEach
-                    if (seen.add(owner to fileName)) {
-                        stage(source.inputStream(), owner, fileName, staging)?.let(payloads::add)
+        try {
+            sourcePaths.distinct().forEach { path ->
+                val source = File(path)
+                if (!source.isFile) return@forEach
+                when {
+                    source.extension.equals("obb", ignoreCase = true) -> {
+                        val fileName = ObbPathPolicy.safeFileName(source.name) ?: return@forEach
+                        val owner = ObbPathPolicy.packageNameFromFileName(fileName) ?: packageName
+                        if (!ObbPathPolicy.isValidPackageName(owner)) return@forEach
+                        if (seen.add(owner to fileName)) {
+                            stage(source.inputStream(), owner, fileName, staging)?.let(payloads::add)
+                        }
                     }
-                }
 
-                isContainer(source) -> extractContainer(source, packageName, staging, seen, payloads)
+                    isContainer(source) -> extractContainer(source, packageName, staging, seen, payloads)
+                }
             }
+            // Cache extraction per source to avoid O(n^2) for multi-split installs
+            payloads
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Cleanup on cancel
+            runCatching { staging.deleteRecursively() }
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "OBB extraction failed")
+            runCatching { staging.deleteRecursively() }
+            emptyList()
         }
-        payloads
     }
 
     private fun extractContainer(

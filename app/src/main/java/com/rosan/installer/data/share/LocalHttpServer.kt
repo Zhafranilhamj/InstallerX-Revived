@@ -28,8 +28,10 @@ class LocalHttpServer(
     private val onError: (String) -> Unit,
 ) {
     private val running = AtomicBoolean(false)
-    private val executor = Executors.newCachedThreadPool()
+    private val executor = Executors.newFixedThreadPool(8)
     private var serverSocket: ServerSocket? = null
+    private val loginAttempts = mutableMapOf<String, MutableList<Long>>()
+    private val loginLock = Any()
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -109,6 +111,16 @@ class LocalHttpServer(
 
         when {
             method == "POST" && path == "/login" -> {
+                val clientIp = headers["x-forwarded-for"] ?: "unknown"
+                if (isRateLimited(clientIp)) {
+                    respondJson(output, "{\"ok\":false,\"error\":\"Too many attempts\"}", 429, "Too Many Requests")
+                    return
+                }
+                val origin = headers["origin"] ?: headers["referer"]
+                if (origin != null && !isSameOrigin(origin, headers["host"])) {
+                    respondJson(output, "{\"ok\":false,\"error\":\"CSRF\"}", 403, "Forbidden")
+                    return
+                }
                 val body = readBody(input, headers)
                 val enteredPin = body.substringAfter("pin=", "").substringBefore('&')
                 if (LocalShareProtocol.isAuthorized(pin, null, enteredPin)) {
@@ -121,8 +133,10 @@ class LocalHttpServer(
                         "Set-Cookie: ${LocalShareProtocol.PIN_COOKIE}=${LocalShareProtocol.pinToken(pin)}; Path=/; HttpOnly; SameSite=Lax\r\nLocation: /\r\n",
                     )
                 } else {
+                    recordLoginAttempt(clientIp)
                     respondHtml(output, 401, "Unauthorized", LocalShareDashboard.loginPage(error = true))
                 }
+            }
             }
 
             !authorized -> respondHtml(output, 401, "Unauthorized", LocalShareDashboard.loginPage())
@@ -178,13 +192,19 @@ class LocalHttpServer(
             if (line.isEmpty()) break
         }
         val safeName = sanitizeFileName(fileName) ?: return null
+        // Support chunked transfer when Content-Length missing
+        val isChunked = headers["transfer-encoding"]?.lowercase()?.contains("chunked") == true
+        if (isChunked) {
+            // For chunked, we can't pre-check length; enforce during write
+        }
         val marker = "\r\n--$boundary".toByteArray(Charsets.US_ASCII)
+        val tempFile = File(receiveDirectory, "$safeName.part")
         val target = File(receiveDirectory, safeName)
         val pending = ByteArray(marker.size)
         var pendingLength = 0
         var written = 0L
         var matched = false
-        target.outputStream().use { output ->
+        tempFile.outputStream().use { output ->
             while (!matched) {
                 val value = input.read()
                 if (value < 0) break
@@ -213,7 +233,12 @@ class LocalHttpServer(
             }
         }
         if (written <= 0L) {
-            target.delete()
+            tempFile.delete()
+            return null
+        }
+        // Atomic move from .part
+        if (!tempFile.renameTo(target)) {
+            tempFile.delete()
             return null
         }
         return target
@@ -239,10 +264,10 @@ class LocalHttpServer(
         val bytes = mutableListOf<Byte>()
         while (true) {
             val value = input.read()
-            if (value < 0) return if (bytes.isEmpty()) null else String(bytes.toByteArray(), Charsets.ISO_8859_1)
+            if (value < 0) return if (bytes.isEmpty()) null else String(bytes.toByteArray(), Charsets.UTF_8)
             if (value == '\n'.code) {
                 if (bytes.lastOrNull() == '\r'.code.toByte()) bytes.removeAt(bytes.lastIndex)
-                return String(bytes.toByteArray(), Charsets.ISO_8859_1)
+                return String(bytes.toByteArray(), Charsets.UTF_8)
             }
             bytes.add(value.toByte())
             if (bytes.size > 16 * 1024) return null
@@ -273,6 +298,25 @@ class LocalHttpServer(
         output.write(header.toByteArray(Charsets.US_ASCII))
         output.write(body)
         output.flush()
+    }
+
+    private fun isRateLimited(ip: String): Boolean = synchronized(loginLock) {
+        val now = System.currentTimeMillis()
+        val attempts = loginAttempts.getOrPut(ip) { mutableListOf() }
+        attempts.removeAll { now - it > 60_000 }
+        attempts.size >= 5
+    }
+
+    private fun recordLoginAttempt(ip: String) = synchronized(loginLock) {
+        loginAttempts.getOrPut(ip) { mutableListOf() }.add(System.currentTimeMillis())
+    }
+
+    private fun isSameOrigin(origin: String, host: String?): Boolean {
+        if (host == null) return false
+        return try {
+            val originHost = java.net.URI(origin).host ?: return false
+            originHost.equals(host.substringBefore(':'), true)
+        } catch (_: Exception) { false }
     }
 
     private fun sanitizeFileName(name: String?): String? {

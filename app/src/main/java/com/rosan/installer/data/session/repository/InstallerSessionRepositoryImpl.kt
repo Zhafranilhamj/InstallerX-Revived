@@ -34,8 +34,9 @@ class InstallerSessionRepositoryImpl(override val id: String, private val onClos
 
     private val isClosed = AtomicBoolean(false)
 
+    private object NoErrorSentinel : Throwable("No error", null, false, false)
     // Properties implementation
-    override var error: Throwable = Throwable()
+    override var error: Throwable = NoErrorSentinel
     override var config: ConfigModel = ConfigModel.default
     override var data: List<DataEntity> by mutableStateOf(emptyList())
     override var sourceUris: List<String> by mutableStateOf(emptyList())

@@ -1193,5 +1193,8 @@
     <string name="intake_downloading">Downloading package…</string>
     <string name="intake_download_failed">Download failed: %1$s</string>
     <string name="intake_invalid_link">This link is not a supported package URL.</string>
+    <string name="intake_confirm_message">Confirm download from:\n%1$s</string>
+    <string name="intake_confirm_action">Download</string>
+    <string name="intake_cancel_action">Cancel</string>
 </resources>
 

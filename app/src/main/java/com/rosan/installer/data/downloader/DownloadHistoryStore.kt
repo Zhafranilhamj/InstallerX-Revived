@@ -37,7 +37,12 @@ class DownloadHistoryStore(
     private fun write(records: List<DownloadRecord>) {
         runCatching {
             file.parentFile?.mkdirs()
-            file.writeText(json.encodeToString(records))
+            val tmp = File(file.parentFile, "${file.name}.tmp")
+            tmp.writeText(json.encodeToString(records))
+            if (!tmp.renameTo(file)) {
+                file.delete()
+                tmp.renameTo(file)
+            }
         }
     }
 }

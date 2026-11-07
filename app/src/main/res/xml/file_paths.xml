@@ -3,10 +3,19 @@
     <cache-path
         name="internal_cache_logs"
         path="logs/" />
+    <cache-path
+        name="internal_cache_sessions"
+        path="installer_sessions/" />
+    <cache-path
+        name="internal_cache_packages"
+        path="downloader/" />
     <external-cache-path
         name="external_cache"
         path="." />
-    <root-path
-        name="root"
-        path="." />
+    <files-path
+        name="internal_files"
+        path="downloader/packages/" />
+    <files-path
+        name="local_share"
+        path="local_share/" />
 </paths>

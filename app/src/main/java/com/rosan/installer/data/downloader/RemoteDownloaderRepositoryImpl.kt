@@ -26,7 +26,11 @@ class RemoteDownloaderRepositoryImpl(
     private val appSettingsRepository: AppSettingsRepository,
 ) : DownloadRepository {
     private val directory = File(context.filesDir, "downloader/packages")
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(java.time.Duration.ofSeconds(30))
+        .readTimeout(java.time.Duration.ofSeconds(30))
+        .writeTimeout(java.time.Duration.ofSeconds(30))
+        .build()
     private val _history = MutableStateFlow<List<DownloadRecord>>(emptyList())
     override val history: StateFlow<List<DownloadRecord>> = _history.asStateFlow()
 
@@ -93,7 +97,20 @@ class RemoteDownloaderRepositoryImpl(
         }
         historyStore.add(record)
         refreshHistory()
+        // Prune old files on disk past 60-item limit
+        pruneExcessFiles()
         result
+    }
+
+    private suspend fun pruneExcessFiles() = withContext(Dispatchers.IO) {
+        val all = historyStore.load().sortedByDescending { it.timestamp }
+        if (all.size > 60) {
+            all.drop(60).forEach { old -> runCatching { File(old.localPath).delete() } }
+        }
+        // Also clean orphaned .part files
+        directory.listFiles()?.filter { it.name.endsWith(".part") }?.forEach { part ->
+            if (System.currentTimeMillis() - part.lastModified() > 24 * 60 * 60 * 1000) runCatching { part.delete() }
+        }
     }
 
     override suspend fun refresh() = refreshHistory()

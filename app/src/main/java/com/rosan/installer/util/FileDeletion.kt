@@ -9,11 +9,44 @@ import timber.log.Timber
 
 private const val DELETE_TAG = "DELETE_PATH"
 
-fun deletePaths(context: Context, paths: List<String>) {
-    for (path in paths) {
-        val file = File(path)
+private val ALLOWED_DELETE_PREFIXES = emptyList<String>() // populated per-context
 
-        Timber.tag(DELETE_TAG).d("Processing path for deletion: $path")
+fun deletePaths(context: Context, paths: List<String>) {
+    // Allowlist: only delete inside app-private dirs, Downloads, cache, external files
+    val allowedRoots = listOfNotNull(
+        runCatching { context.filesDir.canonicalFile }.getOrNull(),
+        runCatching { context.cacheDir.canonicalFile }.getOrNull(),
+        runCatching { context.externalCacheDir?.canonicalFile }.getOrNull(),
+        runCatching { context.getExternalFilesDir(null)?.canonicalFile }.getOrNull(),
+        runCatching { File("/storage/emulated/0/Download").canonicalFile }.getOrNull(),
+        runCatching { File("/sdcard/Download").canonicalFile }.getOrNull(),
+    )
+    for (path in paths) {
+        val file = runCatching { File(path).canonicalFile }.getOrNull() ?: run {
+            Timber.tag(DELETE_TAG).w("Invalid path skipped: $path")
+            continue
+        }
+
+        Timber.tag(DELETE_TAG).d("Processing path for deletion: $path -> ${file.absolutePath}")
+
+        // Path canonicalization and traversal check
+        if (file.absolutePath == "/" || file.absolutePath == "/data" || file.absolutePath == "/system" || file.absolutePath == "/storage/emulated/0") {
+            Timber.tag(DELETE_TAG).w("Blocked dangerous deletion of system root: ${file.absolutePath}")
+            continue
+        }
+        val isAllowed = allowedRoots.any { root -> file.absolutePath == root.absolutePath || file.absolutePath.startsWith(root.absolutePath + File.separator) }
+        if (!isAllowed) {
+            Timber.tag(DELETE_TAG).w("Blocked deletion outside allowed roots: ${file.absolutePath} (allowed: ${allowedRoots.map { it.absolutePath }})")
+            continue
+        }
+        // Symlink check: ensure canonical path is still within allowed roots
+        if (file.canonicalPath != file.absolutePath) {
+            val canonicalAllowed = allowedRoots.any { root -> file.canonicalPath.startsWith(root.canonicalPath + File.separator) || file.canonicalPath == root.canonicalPath }
+            if (!canonicalAllowed) {
+                Timber.tag(DELETE_TAG).w("Blocked symlink traversal deletion: $path -> ${file.canonicalPath}")
+                continue
+            }
+        }
 
         try {
             if (file.exists()) {

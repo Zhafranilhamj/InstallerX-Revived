@@ -5,6 +5,7 @@ package com.rosan.installer.data.session.resolver
 import java.io.IOException
 
 internal data class ContentRange(val start: Long, val end: Long, val total: Long) {
+    fun length(): Long = end - start + 1
     fun matches(start: Long, end: Long, total: Long = this.total): Boolean = this.start == start && this.end == end && this.total == total
 
     fun requireMatches(start: Long, end: Long, total: Long) {

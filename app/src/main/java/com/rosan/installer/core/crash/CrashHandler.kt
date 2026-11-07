@@ -18,11 +18,12 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         // Log the crash to Timber (which pipes it to the file)
         Timber.Forest.tag("CRASH").e(e, "Uncaught Exception detected")
 
-        // Give the file logger a moment to drain the buffer to disk
-        // This is crucial for async loggers!
-        try {
-            Thread.sleep(500)
-        } catch (_: InterruptedException) {
+        // Avoid sleeping on main thread; use brief non-blocking flush if needed
+        if (Thread.currentThread() != android.os.Looper.getMainLooper().thread) {
+            try {
+                Thread.sleep(100)
+            } catch (_: InterruptedException) {
+            }
         }
 
         // Delegate to default handler or kill process

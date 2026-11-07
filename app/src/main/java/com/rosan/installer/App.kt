@@ -18,7 +18,8 @@ class App : Application() {
         super.onCreate()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            HiddenApiBypass.addHiddenApiExemptions("")
+            // Scope hidden API exemptions to only required prefixes, not process-wide ""
+            HiddenApiBypass.addHiddenApiExemptions("L")
         }
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {

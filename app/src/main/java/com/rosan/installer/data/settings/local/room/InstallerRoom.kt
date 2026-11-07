@@ -72,7 +72,7 @@ abstract class InstallerRoom : RoomDatabase() {
                 // Use executeSQL instead of execSQL in Room 3.0
                 connection.execSQL("ALTER TABLE config ADD COLUMN installer_mode INTEGER NOT NULL DEFAULT 0")
                 // Update mode to 2 (Custom) for rows that already have a custom installer set
-                connection.execSQL("UPDATE config SET installer_mode = 2 WHERE installer IS NOT NULL")
+                connection.execSQL("UPDATE config SET installer_mode = 2 WHERE installer IS NOT NULL AND installer != ''")
             }
         }
 
