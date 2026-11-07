@@ -92,7 +92,20 @@ fun LocalSharePage() {
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.local_share_secure), modifier = Modifier.weight(1f))
-                Switch(checked = pin.isNotEmpty(), onCheckedChange = { enabled -> pin = if (enabled) generatePin() else "" })
+                Switch(
+                    checked = pin.isNotEmpty(),
+                    onCheckedChange = { enabled ->
+                        pin = if (enabled) LocalShareProtocol.generatePin() else ""
+                    },
+                )
+            }
+            if (pin.isEmpty()) {
+                // Without a PIN every device on the LAN can push a package; say so plainly.
+                Text(
+                    text = stringResource(R.string.local_share_pin_warning),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
@@ -142,4 +155,4 @@ fun LocalSharePage() {
     }
 }
 
-private fun generatePin(): String = (100000..999999).random().toString()
+

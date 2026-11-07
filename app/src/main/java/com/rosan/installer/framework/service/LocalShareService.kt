@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -28,29 +30,60 @@ class LocalShareService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        // If the user revokes network access the manager stops the server and tells us to go away.
+        manager.onStoppedByNetworkPolicy = {
+            Handler(Looper.getMainLooper()).post {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
-        promoteToForeground()
 
-        if (intent?.action == ACTION_STOP || intent == null) {
+        if (intent == null) {
+            // A null intent means the system restarted us; there is no configuration left to
+            // restore, so shut down instead of opening an unauthenticated server.
             manager.stop()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        val port = intent.getIntExtra(EXTRA_PORT, LocalShareProtocol.DEFAULT_PORT)
-        val pin = intent.getStringExtra(EXTRA_PIN).orEmpty()
-        val result = manager.start(LocalShareConfig(port, pin))
-        if (result.isFailure) {
-            Timber.w(result.exceptionOrNull(), "Local sharing server did not start")
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+        when (intent.action) {
+            ACTION_START -> {
+                promoteToForeground()
+                val port = intent.getIntExtra(EXTRA_PORT, LocalShareProtocol.DEFAULT_PORT)
+                val pin = intent.getStringExtra(EXTRA_PIN).orEmpty()
+                val result = manager.start(LocalShareConfig(port, pin))
+                if (result.isFailure) {
+                    Timber.w(result.exceptionOrNull(), "Local sharing server did not start")
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
+
+            ACTION_STOP -> {
+                manager.stop()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+
+            else -> {
+                Timber.w("LocalShareService received unknown action: ${intent.action}")
+                if (manager.state.value.running) return START_NOT_STICKY
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        manager.onStoppedByNetworkPolicy = null
         manager.stop()
         super.onDestroy()
     }

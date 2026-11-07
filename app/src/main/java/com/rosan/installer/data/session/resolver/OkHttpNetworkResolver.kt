@@ -20,6 +20,7 @@ import com.rosan.installer.domain.session.exception.ResolveException
 import com.rosan.installer.domain.session.model.ProgressEntity
 import com.rosan.installer.domain.session.model.ResolveErrorType
 import com.rosan.installer.domain.session.repository.NetworkResolver
+import com.rosan.installer.domain.share.model.LocalShareProtocol
 import com.rosan.installer.domain.settings.model.config.NetworkSourceMode
 import com.rosan.installer.domain.settings.model.preferences.HttpProfile
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
@@ -748,10 +749,12 @@ class OkHttpNetworkResolver(
                 )
 
                 HttpProfile.ALLOW_LOCAL -> {
-                    if (host != "localhost" && host != "127.0.0.1" && host != "::1") {
+                    // The platform network security config can only name loopback, so LAN peers are
+                    // gated here, where the effective host is known.
+                    if (!isLocalPeerHost(host)) {
                         throw ResolveException(
                             errorType = ResolveErrorType.HTTP_RESTRICTED_FOR_LOCALHOST,
-                            message = "Cleartext HTTP allowed only for localhost.",
+                            message = "Cleartext HTTP allowed only for loopback or LAN peers.",
                         )
                     }
                 }
@@ -761,5 +764,16 @@ class OkHttpNetworkResolver(
                 }
             }
         }
+    }
+
+    /**
+     * Cleartext is only a privacy concern for traffic that leaves the machine or the LAN, and the
+     * network security config cannot name RFC1918 ranges. Loopback, RFC1918, link-local and ULA
+     * peers are therefore treated as local; everything else needs TLS.
+     */
+    private fun isLocalPeerHost(host: String): Boolean {
+        if (host == "localhost") return true
+        val literal = host.removePrefix("[").removeSuffix("]")
+        return LocalShareProtocol.isLocalPeer(literal)
     }
 }

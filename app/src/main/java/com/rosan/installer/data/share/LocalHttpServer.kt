@@ -4,34 +4,108 @@ package com.rosan.installer.data.share
 
 import com.rosan.installer.domain.share.model.LocalShareProtocol
 import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.security.SecureRandom
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import timber.log.Timber
 
 /**
+ * In-memory registry of authenticated dashboard sessions.
+ *
+ * Sessions are minted from [SecureRandom] after a correct PIN, never derived from the PIN itself.
+ * A deterministic cookie made an offline brute force of the PIN possible straight from the cookie
+ * value, and it also meant a leaked cookie could never be revoked without changing the PIN.
+ */
+internal class LocalShareSessionStore(
+    private val ttlMillis: Long = DEFAULT_TTL_MILLIS,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val random: SecureRandom = SecureRandom(),
+    private val maxSessions: Int = MAX_SESSIONS,
+) {
+    private val sessions = object : LinkedHashMap<String, Long>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>): Boolean =
+            size > maxSessions
+    }
+
+    /** Issues a fresh 128-bit session token and returns it. */
+    fun issue(): String {
+        val bytes = ByteArray(TOKEN_BYTES).also(random::nextBytes)
+        val token = bytes.joinToString("") { "%02x".format(it) }
+        synchronized(sessions) {
+            sessions[token] = clock() + ttlMillis
+        }
+        return token
+    }
+
+    fun isValid(token: String?): Boolean {
+        if (token.isNullOrEmpty()) return false
+        synchronized(sessions) {
+            val now = clock()
+            sessions.entries.removeAll { it.value <= now }
+            val expiresAt = sessions[token]
+            // Touch the entry so the LRU ordering follows recent use rather than insertion.
+            if (expiresAt != null) sessions[token] = expiresAt
+            return expiresAt != null
+        }
+    }
+
+    fun clear() = synchronized(sessions) { sessions.clear() }
+
+    private companion object {
+        const val TOKEN_BYTES = 16
+        const val MAX_SESSIONS = 64
+        const val DEFAULT_TTL_MILLIS = 12L * 60 * 60 * 1000
+    }
+}
+
+/**
  * Minimal HTTP/1.1 server used only on the local network. It deliberately avoids a server
  * library dependency: a dashboard page, a PIN login, a status endpoint and a streaming multipart
  * upload are all that is required.
+ *
+ * Security model:
+ *  * only RFC1918/loopback/link-local peers may connect at all ([LocalShareProtocol.isLocalPeer]),
+ *  * every `POST` carrying an `Origin`/`Referer` must be same-origin (blocks cross-site form posts
+ *    and `fetch()` calls from any other page, including when the PIN is disabled),
+ *  * an authenticated browser session must also present the per-run CSRF token on uploads,
+ *  * the rate limiter is keyed on the socket address, never on client-supplied headers.
  */
 class LocalHttpServer(
-    private val port: Int,
+    val port: Int,
     private val pin: String,
     private val receiveDirectory: File,
     private val versionName: String,
     private val onFileReceived: (File) -> Unit,
     private val onError: (String) -> Unit,
+    private val maxUploadBytes: Long = LocalShareProtocol.MAX_UPLOAD_BYTES,
+    private val networkAllowed: () -> Boolean = { true },
 ) {
     private val running = AtomicBoolean(false)
     private val executor = Executors.newFixedThreadPool(8)
     private var serverSocket: ServerSocket? = null
-    private val loginAttempts = mutableMapOf<String, MutableList<Long>>()
     private val loginLock = Any()
+    private val sessions = LocalShareSessionStore()
+
+    /** Random per-run CSRF token embedded in the dashboard and required on browser uploads. */
+    private val csrfToken: String = SecureRandom().let { random ->
+        ByteArray(16).also(random::nextBytes).joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Bounded LRU of recently seen socket addresses. Keying on a client-supplied header let a
+     * remote peer rotate the key and bypass the limiter, or flood the map with `unknown`.
+     */
+    private val loginAttempts = object : LinkedHashMap<String, MutableList<Long>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MutableList<Long>>): Boolean =
+            size > MAX_RATE_LIMIT_KEYS
+    }
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -42,6 +116,7 @@ class LocalHttpServer(
 
     fun stop() {
         if (!running.compareAndSet(true, false)) return
+        sessions.clear()
         runCatching { serverSocket?.close() }
         serverSocket = null
         executor.shutdownNow()
@@ -85,7 +160,15 @@ class LocalHttpServer(
                 }
                 val path = target.substringBefore('?')
                 val query = target.substringAfter('?', "")
-                dispatch(method, path, query, headers, input, output)
+                dispatch(
+                    method = method,
+                    path = path,
+                    query = query,
+                    headers = headers,
+                    input = input,
+                    output = output,
+                    clientIp = socket.inetAddress.hostAddress.orEmpty(),
+                )
             }
         } catch (error: Exception) {
             Timber.w(error, "Local sharing request failed")
@@ -100,37 +183,55 @@ class LocalHttpServer(
         headers: Map<String, String>,
         input: BufferedInputStream,
         output: OutputStream,
+        clientIp: String,
     ) {
+        if (!networkAllowed()) {
+            respondJson(
+                output,
+                """{"ok":false,"error":"Network access is disabled in settings"}""",
+                503,
+                "Service Unavailable",
+            )
+            return
+        }
+
+        // Cross-site request forgery protection for *every* state-changing request, not just
+        // /login. Non-browser clients (curl, the Send-to-TV uploader) send no Origin header and
+        // cannot be driven by a hostile page, so they are not affected.
+        if (method == "POST" && !isSameOriginRequest(headers)) {
+            respondJson(output, """{"ok":false,"error":"CSRF"}""", 403, "Forbidden")
+            return
+        }
+
         val cookieToken = headers["cookie"]
             ?.split(';')
             ?.map { it.trim() }
             ?.firstOrNull { it.startsWith("${LocalShareProtocol.PIN_COOKIE}=") }
             ?.substringAfter('=')
         val suppliedPin = queryPin(query) ?: headers[LocalShareProtocol.PIN_HEADER.lowercase()]
-        val authorized = LocalShareProtocol.isAuthorized(pin, cookieToken, suppliedPin)
+        val hasSession = sessions.isValid(cookieToken)
+        val authorized = pin.isEmpty() ||
+            hasSession ||
+            LocalShareProtocol.matchesPin(pin, suppliedPin)
 
         when {
             method == "POST" && path == "/login" -> {
-                val clientIp = headers["x-forwarded-for"] ?: "unknown"
                 if (isRateLimited(clientIp)) {
-                    respondJson(output, "{\"ok\":false,\"error\":\"Too many attempts\"}", 429, "Too Many Requests")
-                    return
-                }
-                val origin = headers["origin"] ?: headers["referer"]
-                if (origin != null && !isSameOrigin(origin, headers["host"])) {
-                    respondJson(output, "{\"ok\":false,\"error\":\"CSRF\"}", 403, "Forbidden")
+                    respondJson(output, """{"ok":false,"error":"Too many attempts"}""", 429, "Too Many Requests")
                     return
                 }
                 val body = readBody(input, headers)
-                val enteredPin = body.substringAfter("pin=", "").substringBefore('&')
-                if (LocalShareProtocol.isAuthorized(pin, null, enteredPin)) {
+                val enteredPin = decodeFormValue(body.substringAfter("pin=", "").substringBefore('&'))
+                if (LocalShareProtocol.matchesPin(pin, enteredPin)) {
+                    val token = sessions.issue()
                     respond(
                         output,
                         303,
                         "See Other",
                         "text/plain",
                         "ok".toByteArray(),
-                        "Set-Cookie: ${LocalShareProtocol.PIN_COOKIE}=${LocalShareProtocol.pinToken(pin)}; Path=/; HttpOnly; SameSite=Lax\r\nLocation: /\r\n",
+                        "Set-Cookie: ${LocalShareProtocol.PIN_COOKIE}=$token; Path=/; HttpOnly; SameSite=Lax\r\n" +
+                            "Location: /\r\n",
                     )
                 } else {
                     recordLoginAttempt(clientIp)
@@ -141,11 +242,16 @@ class LocalHttpServer(
             !authorized -> respondHtml(output, 401, "Unauthorized", LocalShareDashboard.loginPage())
 
             method == "GET" && (path == "/" || path == "/index.html") ->
-                respondHtml(output, 200, "OK", LocalShareDashboard.mainPage(pin.isNotEmpty(), versionName))
+                respondHtml(
+                    output,
+                    200,
+                    "OK",
+                    LocalShareDashboard.mainPage(pin.isNotEmpty(), versionName, csrfToken),
+                )
 
             method == "GET" && path == "/api/status" -> {
                 val files = receiveDirectory.listFiles()?.count { it.isFile } ?: 0
-                respondJson(output, "{\"running\":true,\"files\":$files,\"pin\":${pin.isNotEmpty()}}")
+                respondJson(output, """{"running":true,"files":$files,"pin":${pin.isNotEmpty()}}""")
             }
 
             method == "GET" && path == "/api/files" -> {
@@ -155,16 +261,42 @@ class LocalHttpServer(
                     ?.take(50)
                     ?.joinToString(",") { "\"${jsonEscape(it.name)}\"" }
                     .orEmpty()
-                respondJson(output, "{\"files\":[$names]}")
+                respondJson(output, """{"files":[$names]}""")
             }
 
             method == "POST" && (path == LocalShareProtocol.UPLOAD_PATH || path == "/push") -> {
-                val result = receiveUpload(input, headers)
-                if (result == null) {
-                    respondJson(output, "{\"ok\":false,\"error\":\"No file received\"}", 400, "Bad Request")
-                } else {
-                    onFileReceived(result)
-                    respondJson(output, "{\"ok\":true,\"name\":\"${jsonEscape(result.name)}\"}")
+                // A browser session must prove it can read the dashboard (the CSRF token) before
+                // an upload is accepted; otherwise any page could POST into this device's session.
+                if (hasSession && headers[CSRF_HEADER].orEmpty() != csrfToken) {
+                    respondJson(output, """{"ok":false,"error":"CSRF"}""", 403, "Forbidden")
+                    return
+                }
+                when (val result = receiveUpload(input, headers)) {
+                    is UploadResult.Success -> {
+                        onFileReceived(result.file)
+                        respondJson(output, """{"ok":true,"name":"${jsonEscape(result.file.name)}"}""")
+                    }
+
+                    UploadResult.TooLarge -> respondJson(
+                        output,
+                        """{"ok":false,"error":"File exceeds the maximum upload size"}""",
+                        413,
+                        "Payload Too Large",
+                    )
+
+                    UploadResult.LengthRequired -> respondJson(
+                        output,
+                        """{"ok":false,"error":"Content-Length is required"}""",
+                        411,
+                        "Length Required",
+                    )
+
+                    UploadResult.Invalid -> respondJson(
+                        output,
+                        """{"ok":false,"error":"No file received"}""",
+                        400,
+                        "Bad Request",
+                    )
                 }
             }
 
@@ -172,80 +304,130 @@ class LocalHttpServer(
         }
     }
 
-    private fun receiveUpload(input: BufferedInputStream, headers: Map<String, String>): File? {
-        val contentLength = headers["content-length"]?.toLongOrNull() ?: -1L
-        if (contentLength > LocalShareProtocol.MAX_UPLOAD_BYTES) return null
+    private sealed interface UploadResult {
+        data class Success(val file: File) : UploadResult
+        data object TooLarge : UploadResult
+        data object LengthRequired : UploadResult
+        data object Invalid : UploadResult
+    }
+
+    private fun receiveUpload(input: BufferedInputStream, headers: Map<String, String>): UploadResult {
+        val isChunked = headers["transfer-encoding"]?.lowercase()?.contains("chunked") == true
+        // Chunked bodies are rejected instead of being half-decoded: a partially written upload is
+        // indistinguishable from a truncated one, and every supported client knows its length.
+        if (isChunked) return UploadResult.LengthRequired
+        val contentLength = headers["content-length"]?.toLongOrNull() ?: return UploadResult.LengthRequired
+        if (contentLength > maxUploadBytes) return UploadResult.TooLarge
         val contentType = headers["content-type"].orEmpty()
         val boundary = Regex("""boundary="?([^";]+)"?""", RegexOption.IGNORE_CASE)
-            .find(contentType)?.groupValues?.get(1) ?: return null
+            .find(contentType)?.groupValues?.get(1) ?: return UploadResult.Invalid
 
         var fileName: String? = null
         var headerLines = 0
         while (headerLines < 40) {
             headerLines++
-            val line = readAsciiLine(input) ?: return null
+            val line = readAsciiLine(input) ?: return UploadResult.Invalid
             if (line.contains("filename=", ignoreCase = true)) {
                 fileName = Regex("""filename="?([^";]*)"?""", RegexOption.IGNORE_CASE)
                     .find(line)?.groupValues?.get(1)
             }
             if (line.isEmpty()) break
         }
-        val safeName = sanitizeFileName(fileName) ?: return null
-        // Support chunked transfer when Content-Length missing
-        val isChunked = headers["transfer-encoding"]?.lowercase()?.contains("chunked") == true
-        if (isChunked) {
-            // For chunked, we can't pre-check length; enforce during write
-        }
+        val safeName = sanitizeFileName(fileName) ?: return UploadResult.Invalid
         val marker = "\r\n--$boundary".toByteArray(Charsets.US_ASCII)
-        val tempFile = File(receiveDirectory, "$safeName.part")
+        // A shared name like "<file>.part" let two concurrent uploads of the same file truncate
+        // each other. createTempFile gives every transfer its own inode.
+        val tempFile = runCatching {
+            File.createTempFile("upload-", ".part", receiveDirectory)
+        }.getOrElse {
+            onError(it.message.orEmpty())
+            return UploadResult.Invalid
+        }
         val target = File(receiveDirectory, safeName)
         val pending = ByteArray(marker.size)
         var pendingLength = 0
         var written = 0L
+        var exceeded = false
         var matched = false
-        tempFile.outputStream().use { output ->
-            while (!matched) {
-                val value = input.read()
-                if (value < 0) break
-                if (written + pendingLength > LocalShareProtocol.MAX_UPLOAD_BYTES) break
-                val byte = value.toByte()
-                if (byte == marker[pendingLength]) {
-                    pending[pendingLength++] = byte
-                    if (pendingLength == marker.size) matched = true
-                } else {
-                    if (pendingLength > 0) {
+        val chunk = ByteArray(64 * 1024)
+
+        try {
+            tempFile.outputStream().buffered().use { output ->
+                scan@ while (!matched) {
+                    val read = input.read(chunk)
+                    if (read < 0) break
+                    var index = 0
+                    while (index < read) {
+                        val byte = chunk[index]
+                        index++
+                        if (byte == marker[pendingLength]) {
+                            pending[pendingLength++] = byte
+                            if (pendingLength == marker.size) {
+                                matched = true
+                                break@scan
+                            }
+                        } else {
+                            if (pendingLength > 0) {
+                                if (written + pendingLength > maxUploadBytes) {
+                                    exceeded = true
+                                    break@scan
+                                }
+                                output.write(pending, 0, pendingLength)
+                                written += pendingLength
+                                pendingLength = 0
+                            }
+                            if (byte == marker[0]) {
+                                pending[pendingLength++] = byte
+                            } else {
+                                if (written + 1 > maxUploadBytes) {
+                                    exceeded = true
+                                    break@scan
+                                }
+                                output.write(byte.toInt())
+                                written++
+                            }
+                        }
+                    }
+                }
+                if (!exceeded && !matched && pendingLength > 0) {
+                    if (written + pendingLength > maxUploadBytes) {
+                        exceeded = true
+                    } else {
                         output.write(pending, 0, pendingLength)
                         written += pendingLength
-                        pendingLength = 0
-                    }
-                    if (byte == marker[0]) {
-                        pending[pendingLength++] = byte
-                    } else {
-                        output.write(value)
-                        written++
                     }
                 }
             }
-            if (!matched && pendingLength > 0) {
-                output.write(pending, 0, pendingLength)
-                written += pendingLength
-            }
-        }
-        if (written <= 0L) {
+        } catch (error: Exception) {
             tempFile.delete()
-            return null
+            onError(error.message.orEmpty())
+            return UploadResult.Invalid
         }
-        // Atomic move from .part
+
+        if (exceeded) {
+            tempFile.delete()
+            return UploadResult.TooLarge
+        }
+        if (!matched || written <= 0L) {
+            tempFile.delete()
+            return UploadResult.Invalid
+        }
         if (!tempFile.renameTo(target)) {
             tempFile.delete()
-            return null
+            return UploadResult.Invalid
         }
-        return target
+        return UploadResult.Success(target)
     }
 
+    /** Percent-decodes the `pin` query parameter so an encoded digit is not rejected. */
     private fun queryPin(query: String): String? = query.split('&')
         .firstOrNull { it.substringBefore('=') == "pin" }
         ?.substringAfter('=')
+        ?.let(::decodeFormValue)
+
+    private fun decodeFormValue(value: String): String = runCatching {
+        java.net.URLDecoder.decode(value, "UTF-8")
+    }.getOrDefault(value)
 
     private fun readBody(input: BufferedInputStream, headers: Map<String, String>): String {
         val length = headers["content-length"]?.toIntOrNull()?.coerceIn(0, 4096) ?: return ""
@@ -260,22 +442,25 @@ class LocalHttpServer(
     }
 
     private fun readAsciiLine(input: BufferedInputStream): String? {
-        val bytes = mutableListOf<Byte>()
+        val bytes = ByteArrayOutputStream(128)
         while (true) {
             val value = input.read()
-            if (value < 0) return if (bytes.isEmpty()) null else String(bytes.toByteArray(), Charsets.UTF_8)
+            if (value < 0) return if (bytes.size() == 0) null else bytes.toString("UTF-8")
             if (value == '\n'.code) {
-                if (bytes.lastOrNull() == '\r'.code.toByte()) bytes.removeAt(bytes.lastIndex)
-                return String(bytes.toByteArray(), Charsets.UTF_8)
+                val raw = bytes.toByteArray()
+                val length = if (raw.isNotEmpty() && raw.last() == '\r'.code.toByte()) raw.size - 1 else raw.size
+                return String(raw, 0, length, Charsets.UTF_8)
             }
-            bytes.add(value.toByte())
-            if (bytes.size > 16 * 1024) return null
+            bytes.write(value)
+            if (bytes.size() > 16 * 1024) return null
         }
     }
 
-    private fun respondHtml(output: OutputStream, code: Int, reason: String, html: String) = respond(output, code, reason, "text/html; charset=utf-8", html.toByteArray(Charsets.UTF_8))
+    private fun respondHtml(output: OutputStream, code: Int, reason: String, html: String) =
+        respond(output, code, reason, "text/html; charset=utf-8", html.toByteArray(Charsets.UTF_8))
 
-    private fun respondJson(output: OutputStream, json: String, code: Int = 200, reason: String = "OK") = respond(output, code, reason, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
+    private fun respondJson(output: OutputStream, json: String, code: Int = 200, reason: String = "OK") =
+        respond(output, code, reason, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
 
     private fun respond(
         output: OutputStream,
@@ -303,11 +488,23 @@ class LocalHttpServer(
         val now = System.currentTimeMillis()
         val attempts = loginAttempts.getOrPut(ip) { mutableListOf() }
         attempts.removeAll { now - it > 60_000 }
-        attempts.size >= 5
+        attempts.size >= MAX_LOGIN_ATTEMPTS
     }
 
     private fun recordLoginAttempt(ip: String) = synchronized(loginLock) {
-        loginAttempts.getOrPut(ip) { mutableListOf() }.add(System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        val attempts = loginAttempts.getOrPut(ip) { mutableListOf() }
+        attempts.removeAll { now - it > 60_000 }
+        attempts.add(now)
+    }
+
+    /**
+     * A browser always attaches `Origin` (or at least `Referer`) to a `POST`. When the header is
+     * absent the caller is not a browser page and cannot be used as a CSRF vector.
+     */
+    private fun isSameOriginRequest(headers: Map<String, String>): Boolean {
+        val origin = headers["origin"] ?: headers["referer"] ?: return true
+        return isSameOrigin(origin, headers["host"])
     }
 
     private fun isSameOrigin(origin: String, host: String?): Boolean {
@@ -320,10 +517,13 @@ class LocalHttpServer(
         }
     }
 
+    /** Only installable container types are accepted; everything else is refused outright. */
     private fun sanitizeFileName(name: String?): String? {
         val candidate = name?.substringAfterLast('/')?.substringAfterLast('\\') ?: return null
         val cleaned = candidate.filter { it.isLetterOrDigit() || it in "._-" }
         if (cleaned.isBlank() || cleaned.length > 120 || cleaned.startsWith(".")) return null
+        val extension = cleaned.substringAfterLast('.', "").lowercase()
+        if (extension !in ALLOWED_EXTENSIONS) return null
         return cleaned
     }
 
@@ -332,4 +532,11 @@ class LocalHttpServer(
         .replace("\"", "\\\"")
         .replace("\n", " ")
         .replace("\r", " ")
+
+    private companion object {
+        const val CSRF_HEADER = "x-csrf-token"
+        const val MAX_LOGIN_ATTEMPTS = 5
+        const val MAX_RATE_LIMIT_KEYS = 128
+        val ALLOWED_EXTENSIONS = setOf("apk", "apks", "apkm", "xapk", "zip", "obb")
+    }
 }
