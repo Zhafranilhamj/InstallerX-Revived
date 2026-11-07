@@ -127,12 +127,57 @@ jobs:
           echo "storePassword=${SIGNING_STORE_PASSWORD}" >> keystore.properties
 
       - name: Build Preview Debug APK
+        id: build
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          ./gradlew assemblePreviewDebug --no-configuration-cache
-          -PAPP_ID="${{ steps.meta.outputs.app_id }}"
+        run: |
+          set -o pipefail
+          ./gradlew assemblePreviewDebug --no-configuration-cache --console=plain \
+            -PAPP_ID="${{ steps.meta.outputs.app_id }}" 2>&1 | tee build.log
+
+      # Surface compiler errors as check annotations so they show up inline in the Checks tab.
+      - name: Report build failures
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          if [ ! -f build.log ]; then
+            echo "::error::Gradle build failed and no log was captured."
+            exit 0
+          fi
+
+          ANNOTATED=0
+          while IFS= read -r line; do
+            LOCATION=${line#e: file://}
+            LOCATION=${LOCATION%% *}
+            MESSAGE=$(printf '%s' "$line" | sed -E 's#^[^ ]+ file://[^ ]+ ##')
+            FILE=${LOCATION%%:*}
+            REST=${LOCATION#*:}
+            LINE_NO=${REST%%:*}
+            COL_NO=${REST#*:}
+            COL_NO=${COL_NO%%:*}
+            FILE=${FILE#$GITHUB_WORKSPACE/}
+            MESSAGE=${MESSAGE//'%'/'%25'}
+            echo "::error file=${FILE},line=${LINE_NO},col=${COL_NO}::${MESSAGE}"
+            ANNOTATED=$((ANNOTATED + 1))
+          done < <(grep -E '^e: file://' build.log | head -n 15)
+
+          if [ "$ANNOTATED" -eq 0 ]; then
+            while IFS= read -r line; do
+              echo "::error::$(printf '%s' "$line" | sed 's/%/%25/g')"
+            done < <(grep -E 'FAILURE:|What went wrong|^\* Exception|Execution failed for task|^> ' build.log | tail -n 10)
+          fi
+
+          if [ "$ANNOTATED" -eq 0 ]; then
+            echo "::error::Gradle build failed. See the raw log for details."
+          fi
+
+      - name: Report build error tail
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          echo '### Build failed' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 40 build.log 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect and rename preview APK
         id: package_apk
