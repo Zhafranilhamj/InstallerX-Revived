@@ -563,13 +563,15 @@ class OkHttpNetworkResolver(
 
                     // Calculate current integer percentage (0-100)
                     val currentPercent = ((currentTotal.toDouble() / totalSize) * 100).toInt()
-                    val lastPercent = lastEmittedPercent.get()
 
-                    // Only acquire lock and emit if the percentage has increased by at least 1%
-                    if (currentPercent > lastPercent) {
-                        // CompareAndSet ensures only ONE thread emits for this percentage step
-                        if (lastEmittedPercent.compareAndSet(lastPercent, currentPercent)) {
-                            progressMutex.withLock {
+                    // Only emit when the integer percentage actually advanced. The check *and* the
+                    // update both happen under the mutex: a compare-and-set outside the lock let a
+                    // later chunk win the race and emit 60% before an earlier chunk emitted 55%,
+                    // making the progress bar jump backwards.
+                    if (currentPercent > lastEmittedPercent.get()) {
+                        progressMutex.withLock {
+                            if (currentPercent > lastEmittedPercent.get()) {
+                                lastEmittedPercent.set(currentPercent)
                                 progressFlow.emit(ProgressEntity.InstallPreparing(currentPercent / 100f))
                             }
                         }

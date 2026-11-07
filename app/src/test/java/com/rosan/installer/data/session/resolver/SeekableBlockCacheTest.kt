@@ -5,6 +5,9 @@ package com.rosan.installer.data.session.resolver
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.concurrent.thread
 
 class SeekableBlockCacheTest {
     private val source = ByteArray(32) { it.toByte() }
@@ -52,6 +55,41 @@ class SeekableBlockCacheTest {
         assertEquals(0, cache.read(offset = 32, requestedSize = 4, destination = ByteArray(4)))
 
         assertEquals(listOf(24L to 8), loads)
+    }
+
+    @Test
+    fun `a slow block fetch does not block reads of other blocks`() {
+        val blockSize = 8
+        val slowLoadStarted = java.util.concurrent.CountDownLatch(1)
+        val releaseSlowLoad = java.util.concurrent.CountDownLatch(1)
+        val cache = SeekableBlockCache(
+            contentLength = 32,
+            blockSize = blockSize,
+            maxCachedBytes = 32,
+            loadBlock = { offset, size ->
+                if (offset == 8L) {
+                    slowLoadStarted.countDown()
+                    releaseSlowLoad.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                }
+                ByteArray(size) { offset.toByte() }
+            },
+        )
+
+        val slowReader = thread(start = true, isDaemon = true) {
+            runCatching { cache.read(8, blockSize, ByteArray(blockSize)) }
+        }
+        assertTrue(slowLoadStarted.await(5, java.util.concurrent.TimeUnit.SECONDS), "slow load never started")
+
+        // The cache used to hold a single class-wide monitor, so this read queued behind the fetch.
+        val fastReader = thread(start = true, isDaemon = true) {
+            cache.read(0, blockSize, ByteArray(blockSize))
+        }
+        fastReader.join(2_000)
+        assertFalse(fastReader.isAlive, "a read of another block must not wait for the slow fetch")
+
+        releaseSlowLoad.countDown()
+        slowReader.join(2_000)
+        assertContentEquals(ByteArray(blockSize) { 8.toByte() }, read(cache, offset = 8, size = blockSize))
     }
 
     @Test

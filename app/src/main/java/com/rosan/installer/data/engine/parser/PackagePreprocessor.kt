@@ -11,6 +11,7 @@ import com.rosan.installer.domain.engine.model.source.DataType
 import com.rosan.installer.domain.engine.model.source.ZipEntryMetadataSource
 import com.rosan.installer.domain.engine.provider.InstalledAppInfoProvider
 import java.io.File
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -18,7 +19,9 @@ import kotlinx.coroutines.coroutineScope
 
 class PackagePreprocessor(
     private val installedAppInfoProvider: InstalledAppInfoProvider,
-    private val unifiedZipFileProvider: UnifiedZipFileProvider,
+    // Kept in the constructor for Koin wiring compatibility; dedup no longer needs a zip provider
+    // because content is verified with SHA-256 through the entity's own input stream.
+    @Suppress("UNUSED_PARAMETER") unifiedZipFileProvider: UnifiedZipFileProvider,
 ) {
 
     data class ProcessedGroup(val packageName: String, val entities: List<AppEntity>, val installedInfo: InstalledAppInfo?)
@@ -81,46 +84,55 @@ class PackagePreprocessor(
         // If there is only one Base, no deduplication calculation is needed, return directly
         if (bases.size <= 1) return@coroutineScope entities
 
-        // Calculate fingerprint
-        val hashedBases = bases.map { entity ->
-            async { calculateFingerprint(entity) to entity }
-        }.awaitAll()
+        val cheapKeys = bases.map { it.cheapFingerprint() }
+        // A (CRC32, size) pair can prove two entries are different, but never that they are the
+        // same: CRC32 collisions are trivial to construct. Only the ambiguous candidates are hashed
+        // with SHA-256, so the common case stays as fast as before without trusting the checksum.
+        val ambiguousKeys = cheapKeys.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+        val digests = bases.mapIndexed { index, entity ->
+            if (cheapKeys[index] in ambiguousKeys) {
+                async(Dispatchers.IO) { entity.contentSha256() ?: cheapKeys[index] }
+            } else {
+                null
+            }
+        }.map { it?.await() }
 
-        // Deduplicate based on fingerprint
-        val distinctBases = hashedBases
-            .distinctBy { it.first } // pair.first is hash
-            .map { it.second }
+        val seen = HashSet<String>()
+        val distinctBases = bases.filterIndexed { index, _ ->
+            val digest = digests[index]
+            val key = if (digest != null) "sha256:$digest" else "crc:${cheapKeys[index]}"
+            seen.add(key)
+        }
 
         val others = entities.filter { it !is AppEntity.BaseEntity }
         distinctBases + others
     }
 
-    private fun calculateFingerprint(entity: AppEntity.BaseEntity): String {
-        (entity.data as? ZipEntryMetadataSource)?.zipEntryMetadata
+    /** SHA-256 of the decoded entry content, or `null` when the source cannot be read. */
+    private fun AppEntity.BaseEntity.contentSha256(): String? = runCatching {
+        data.getInputStreamWhileNotEmpty()?.use { input ->
+            val digest = MessageDigest.getInstance("SHA-256")
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }
+        }
+    }.getOrNull()
+
+    /** Cheap identity used only to shortlist candidates for the SHA-256 check. */
+    private fun AppEntity.BaseEntity.cheapFingerprint(): String {
+        (data as? ZipEntryMetadataSource)?.zipEntryMetadata
             ?.takeIf { it.crc >= 0L && it.uncompressedSize >= 0L }
             ?.let { return "${it.crc}|${it.uncompressedSize}" }
 
-        return when (val data = entity.data) {
-            is DataEntity.FileEntity -> {
-                // Full file hash (slower but accurate)
-                data.calculateSHA256() ?: "${data.path}_${entity.versionCode}"
-            }
-
-            is DataEntity.ZipFileEntity -> {
-                // Zip Entry optimization: Use CRC + Size only, no decompression, extremely fast
-                try {
-                    val allowLocalHeaderFallback = entity.sourceType?.allowsLocalHeaderFallback ?: true
-                    unifiedZipFileProvider.open(data.parent, allowLocalHeaderFallback).use { zip ->
-                        zip.getEntry(data.name)?.let { "${it.crc}|${it.size}" }
-                    } ?: "${data.name}_${entity.versionCode}"
-                } catch (_: Exception) {
-                    "${data.name}_${entity.versionCode}"
-                }
-            }
-
-            is DataEntity.SeekableZipEntryEntity -> "${data.crc}|${data.getSize()}"
-
-            else -> "${entity.packageName}_${entity.versionCode}"
+        return when (val entityData = data) {
+            is DataEntity.FileEntity -> "${entityData.path}|${entityData.getSize()}"
+            is DataEntity.ZipFileEntity -> "${entityData.name}|${entityData.getSize()}"
+            is DataEntity.SeekableZipEntryEntity -> "${entityData.crc}|${entityData.getSize()}"
+            else -> "${packageName}_${versionCode}"
         }
     }
 
