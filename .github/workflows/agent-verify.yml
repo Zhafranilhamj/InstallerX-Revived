@@ -52,8 +52,8 @@ jobs:
               fi
             done
             echo '```'
-          } > apksig-probe.md
-          cat apksig-probe.md
+          } > /tmp/apksig-probe.md
+          cat /tmp/apksig-probe.md
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -73,7 +73,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew spotlessApply --no-configuration-cache --console=plain > spotless.log 2>&1
+          ./gradlew spotlessApply --no-configuration-cache --console=plain > /tmp/spotless.log 2>&1
 
       - name: Unit tests
         id: tests
@@ -82,7 +82,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew ${{ github.event.inputs.task || 'testUnstableDebugUnitTest' }} --no-configuration-cache -PAPP_ID="com.rosan.installer.x.revived.test" --console=plain > tests.log 2>&1
+          ./gradlew ${{ github.event.inputs.task || 'testUnstableDebugUnitTest' }} --no-configuration-cache -PAPP_ID="com.rosan.installer.x.revived.test" --console=plain > /tmp/tests.log 2>&1
 
       - name: Collect test failures as annotations
         if: always()
@@ -102,7 +102,7 @@ jobs:
                       print("::error title=unit-test %s :: %s" % (name, message))
           PY
           python3 /tmp/report.py || true
-          grep -hE '^e: file' tests.log 2>/dev/null | head -n 40 | while IFS= read -r line; do
+          grep -hE '^e: file' /tmp/tests.log 2>/dev/null | head -n 40 | while IFS= read -r line; do
             printf '::error title=compile::%s\n' "$(printf '%s' "$line" | sed 's/%/%25/g')"
           done || true
 
@@ -116,16 +116,16 @@ jobs:
             echo "Formatting outcome: ${{ steps.format.outcome }}"
             echo "Tests outcome: ${{ steps.tests.outcome }}"
             echo
-            cat apksig-probe.md 2>/dev/null || true
+            cat /tmp/apksig-probe.md 2>/dev/null || true
             echo
             echo '## spotless.log (tail)'
             echo '```'
-            tail -n 60 spotless.log 2>/dev/null || echo 'no spotless log'
+            tail -n 60 /tmp/spotless.log 2>/dev/null || echo 'no spotless log'
             echo '```'
             echo
             echo '## tests.log (tail)'
             echo '```'
-            tail -n 220 tests.log 2>/dev/null || echo 'no test log'
+            tail -n 220 /tmp/tests.log 2>/dev/null || echo 'no test log'
             echo '```'
             echo
             echo '## failing test methods'

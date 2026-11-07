@@ -122,18 +122,19 @@ class LocalHttpServerTest {
 
     @Test
     fun `upload of exactly the size limit is accepted`() {
-        withServer(maxUploadBytes = UPLOAD_LIMIT) { server, directory ->
-            val body = ByteArray(UPLOAD_LIMIT.toInt()) { 'a'.code.toByte() }
-            assertEquals(200, upload(server, "at-limit.apk", body).first)
+        // The limit applies to the whole request body, so the multipart envelope counts towards it.
+        val payload = plainMultipart("at-limit.apk", ByteArray(256) { 'a'.code.toByte() })
+        withServer(maxUploadBytes = payload.contentLength()) { server, directory ->
+            assertEquals(200, upload(server, "at-limit.apk", payload).first)
             assertEquals(1, directory.listFiles()?.count { it.name.endsWith(".apk") } ?: 0)
         }
     }
 
     @Test
     fun `upload one byte over the size limit is rejected with 413`() {
-        withServer(maxUploadBytes = UPLOAD_LIMIT) { server, directory ->
-            val body = ByteArray(UPLOAD_LIMIT.toInt() + 1) { 'a'.code.toByte() }
-            assertEquals(413, upload(server, "too-big.apk", body).first)
+        val payload = plainMultipart("too-big.apk", ByteArray(256) { 'a'.code.toByte() })
+        withServer(maxUploadBytes = payload.contentLength() - 1) { server, directory ->
+            assertEquals(413, upload(server, "too-big.apk", payload).first)
             assertTrue(
                 directory.listFiles().orEmpty().none { it.name.endsWith(".apk") || it.name.endsWith(".part") },
                 "Oversized uploads must not leave a partial file behind",

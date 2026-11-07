@@ -25,12 +25,22 @@ class PackageLinkPolicyTest {
     @Test
     fun `accepts container links that carry a query string`() {
         listOf(
-            "https://example.com/get?file=app.apk",
             "https://example.com/app.apk?token=abc123&expires=99",
             "https://example.com/dl/app.apks#fragment",
             "https://example.com/app.apk?redirect=https%3A%2F%2Fevil.example%2Fx.exe",
         ).forEach { url ->
             assertTrue(PackageLinkPolicy.isAllowedPackageUrl(url), url)
+        }
+    }
+
+    @Test
+    fun `rejects links whose extension only appears in the query`() {
+        // The extension has to be in the path: `.../get?file=app.apk` can serve anything.
+        listOf(
+            "https://example.com/get?file=app.apk",
+            "https://example.com/download?name=app.xapk",
+        ).forEach { url ->
+            assertFalse(PackageLinkPolicy.isAllowedPackageUrl(url), url)
         }
     }
 
