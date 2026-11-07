@@ -39,6 +39,7 @@ import com.rosan.installer.domain.engine.model.install.InstallPhase
 import com.rosan.installer.domain.engine.model.install.InstallWriteProgress
 import com.rosan.installer.domain.engine.model.install.shouldAutoDeleteSource
 import com.rosan.installer.domain.engine.model.install.sourcePath
+import com.rosan.installer.domain.engine.model.packageinfo.SplitNamePolicy
 import com.rosan.installer.domain.engine.model.source.DataType
 import com.rosan.installer.domain.engine.repository.AppInstallerRepository
 import com.rosan.installer.domain.privileged.model.PostInstallTaskInfo
@@ -50,10 +51,7 @@ import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.domain.settings.repository.BooleanSetting
 import com.rosan.installer.framework.privileged.core.execution.authorization.requireDhizukuPermissionGranted
 import com.rosan.installer.util.pm.isFreshInstallCandidate
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import timber.log.Timber
 
 abstract class IBinderAppInstallerRepoImpl(
@@ -426,6 +424,14 @@ abstract class IBinderAppInstallerRepoImpl(
         onEntryProgress: (Long) -> Unit,
     ) {
         Timber.d("Installing entity: ${entity.name}, data path: ${entity.data}, top source: ${entity.data.getSourceTop()}")
+        // `entity.name` becomes the key written into the platform install session. Reject anything
+        // that is not an identifier-like file name so a crafted split cannot escape that namespace.
+        if (!SplitNamePolicy.isValidEntryName(entity.name)) {
+            throw InstallException(
+                InstallErrorType.INVALID_APK,
+                "Unsafe session entry name: ${entity.name.take(64)}",
+            )
+        }
         val sizeBytes = entity.data.getSize()
 
         if (sizeBytes == 0L || sizeBytes < AssetFileDescriptor.UNKNOWN_LENGTH) {

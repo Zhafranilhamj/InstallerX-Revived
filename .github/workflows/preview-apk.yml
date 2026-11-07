@@ -1,0 +1,217 @@
+name: Preview APK
+
+# Builds a ready-to-install Preview APK and exposes it as a downloadable artifact.
+#
+# The Preview flavor is a debug-signed build that can be installed alongside the official
+# com.rosan.installer.x.revived release because it uses its own application ID.
+#
+# Usage:
+#   - Actions -> "Preview APK" -> Run workflow (also runs on every push to a non-main branch)
+#   - Download the "preview-apk-<sha>" artifact from the run summary (retained for 90 days)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        description: 'Application ID suffix (keeps the preview installable side-by-side)'
+        required: false
+        default: '.preview'
+        type: string
+
+  push:
+    branches-ignore:
+      - 'main'
+      - 'weblate-dev'
+      - 'renovate/**'
+    paths:
+      - 'app/**'
+      - 'app-process/**'
+      - 'baselineprofile/**'
+      - 'build-plugins/**'
+      - 'hidden-api/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/preview-apk.yml'
+
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'app/**'
+      - 'app-process/**'
+      - 'baselineprofile/**'
+      - 'build-plugins/**'
+      - 'hidden-api/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/preview-apk.yml'
+
+concurrency:
+  group: preview-apk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build_preview_apk:
+    name: Build Preview APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve build metadata
+        id: meta
+        env:
+          APP_ID_SUFFIX: ${{ github.event.inputs.app_id || '.preview' }}
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          SAFE_SUFFIX=$(printf '%s' "$APP_ID_SUFFIX" | tr -cd '.\-A-Za-z0-9')
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "app_id=com.rosan.installer.x.revived${SAFE_SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=preview-apk-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
+          build-scan-terms-of-use-agree: "yes"
+          build-scan-publish: false
+          # Never poison the shared cache from branches or PRs.
+          cache-read-only: true
+          cache-encryption-key: ${{ secrets.GRADLE_CACHE_ENCRYPTION_KEY }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # Optional: a real signing key makes the preview upgradeable in place across runs.
+      # Without the secrets the build falls back to the default debug keystore.
+      - name: Decode and set up signing key
+        env:
+          SIGNING_KEY_STORE_BASE64: ${{ secrets.SIGNING_KEY_STORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -z "${SIGNING_STORE_PASSWORD:-}" ] || [ -z "${SIGNING_KEY_STORE_BASE64:-}" ] || [ -z "${SIGNING_KEY_PASSWORD:-}" ] || [ -z "${SIGNING_KEY_ALIAS:-}" ]; then
+            echo "No signing secrets configured; the preview APK will be debug-signed."
+            exit 0
+          fi
+          mkdir -p keystore
+          echo "${SIGNING_KEY_STORE_BASE64}" | base64 --decode > keystore/carlyu.jks
+          echo "storeFile=keystore/carlyu.jks" > keystore.properties
+          echo "keyAlias=${SIGNING_KEY_ALIAS}" >> keystore.properties
+          echo "keyPassword=${SIGNING_KEY_PASSWORD}" >> keystore.properties
+          echo "storePassword=${SIGNING_STORE_PASSWORD}" >> keystore.properties
+
+      - name: Build Preview Debug APK
+        id: build
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          ./gradlew assemblePreviewDebug --no-configuration-cache --console=plain \
+            -PAPP_ID="${{ steps.meta.outputs.app_id }}" 2>&1 | tee build.log
+
+      # Surface compiler errors as check annotations so they show up inline in the Checks tab.
+      - name: Report build failures
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          if [ ! -f build.log ]; then
+            echo "::error::Gradle build failed and no log was captured."
+            exit 0
+          fi
+
+          ANNOTATED=0
+          while IFS= read -r line; do
+            LOCATION=${line#e: file://}
+            LOCATION=${LOCATION%% *}
+            MESSAGE=$(printf '%s' "$line" | sed -E 's#^[^ ]+ file://[^ ]+ ##')
+            FILE=${LOCATION%%:*}
+            REST=${LOCATION#*:}
+            LINE_NO=${REST%%:*}
+            COL_NO=${REST#*:}
+            COL_NO=${COL_NO%%:*}
+            FILE=${FILE#$GITHUB_WORKSPACE/}
+            MESSAGE=${MESSAGE//'%'/'%25'}
+            echo "::error file=${FILE},line=${LINE_NO},col=${COL_NO}::${MESSAGE}"
+            ANNOTATED=$((ANNOTATED + 1))
+          done < <(grep -E '^e: file://' build.log | head -n 15)
+
+          if [ "$ANNOTATED" -eq 0 ]; then
+            while IFS= read -r line; do
+              echo "::error::$(printf '%s' "$line" | sed 's/%/%25/g')"
+            done < <(grep -E 'FAILURE:|What went wrong|^\* Exception|Execution failed for task|^> ' build.log | tail -n 10)
+          fi
+
+          if [ "$ANNOTATED" -eq 0 ]; then
+            echo "::error::Gradle build failed. See the raw log for details."
+          fi
+
+      - name: Report build error tail
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          echo '### Build failed' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 40 build.log 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect and rename preview APK
+        id: package_apk
+        run: |
+          OUTPUT_DIR="app/build/outputs/apk/Preview/debug"
+          APK_PATH=$(find "$OUTPUT_DIR" -maxdepth 1 -type f -name "*.apk" | head -n 1)
+
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::Preview APK not found in $OUTPUT_DIR"
+            ls -R app/build/outputs/apk || true
+            exit 1
+          fi
+
+          mkdir -p dist
+          TARGET="dist/InstallerX-Revived-preview-${{ steps.meta.outputs.short_sha }}.apk"
+          cp "$APK_PATH" "$TARGET"
+
+          echo "apk=$TARGET" >> "$GITHUB_OUTPUT"
+          echo '### Preview APK' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| File | \`$(basename "$TARGET")\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Application ID | \`${{ steps.meta.outputs.app_id }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Size | $(du -h "$TARGET" | cut -f1) |" >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo "Download it from the **Artifacts** section of this run." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Preview APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: ${{ steps.package_apk.outputs.apk }}
+          if-no-files-found: error
+          retention-days: 90
+          archive: false

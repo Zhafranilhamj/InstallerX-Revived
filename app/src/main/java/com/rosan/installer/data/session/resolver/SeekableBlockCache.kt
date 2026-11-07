@@ -18,7 +18,13 @@ internal class SeekableBlockCache(
     private val loadBlock: (offset: Long, size: Int) -> ByteArray,
 ) {
     private val maxCachedBlocks = (maxCachedBytes / blockSize).coerceAtLeast(1)
+
+    /** Guards [blocks] and [blockLocks]; held only for map operations, never during a load. */
+    private val mapLock = Any()
     private val blocks = LinkedHashMap<Long, ByteArray>(maxCachedBlocks, 0.75f, true)
+
+    /** One monitor per block offset so a slow fetch only blocks readers of that same block. */
+    private val blockLocks = HashMap<Long, Any>()
 
     init {
         require(contentLength > 0L) { "contentLength must be positive" }
@@ -26,7 +32,6 @@ internal class SeekableBlockCache(
         require(maxCachedBytes > 0) { "maxCachedBytes must be positive" }
     }
 
-    @Synchronized
     fun read(offset: Long, requestedSize: Int, destination: ByteArray): Int {
         require(offset >= 0L) { "offset must be non-negative" }
         require(requestedSize >= 0) { "requestedSize must be non-negative" }
@@ -39,7 +44,7 @@ internal class SeekableBlockCache(
             val position = offset + copied
             val blockOffset = position % blockSize
             val blockStart = position - blockOffset
-            val block = blocks[blockStart] ?: fetchAndCacheBlock(blockStart)
+            val block = blockAt(blockStart)
             val count = min(targetSize - copied, block.size - blockOffset.toInt())
             if (count <= 0) throw IOException("Cached range block cannot satisfy offset $position")
             block.copyInto(destination, copied, blockOffset.toInt(), blockOffset.toInt() + count)
@@ -48,9 +53,48 @@ internal class SeekableBlockCache(
         return copied
     }
 
-    @Synchronized
     fun clear() {
-        blocks.clear()
+        synchronized(mapLock) {
+            blocks.clear()
+            blockLocks.clear()
+        }
+    }
+
+    /**
+     * Returns the cached block at [offset], loading it while holding only that block's monitor.
+     *
+     * The previous implementation synchronised the whole [read], so one 1 MiB network fetch blocked
+     * every other reader (and the UI's random access pattern serialised completely).
+     */
+    private fun blockAt(offset: Long): ByteArray {
+        synchronized(mapLock) { blocks[offset] }?.let { return it }
+        val blockLock = synchronized(mapLock) {
+            // Keep the per-offset monitors proportional to the block cache, never to the file size.
+            if (blockLocks.size > maxCachedBlocks * 4) {
+                blockLocks.keys.retainAll(blocks.keys)
+            }
+            blockLocks.getOrPut(offset) { Any() }
+        }
+        synchronized(blockLock) {
+            var cached: ByteArray? = null
+            synchronized(mapLock) { cached = blocks[offset] }
+            cached?.let { return it }
+            val loaded = fetchBlock(offset)
+            synchronized(mapLock) { cache(offset, loaded) }
+            return loaded
+        }
+    }
+
+    /** Must be called while holding [mapLock]. */
+    private fun cache(offset: Long, block: ByteArray) {
+        if (blocks.size >= maxCachedBlocks) {
+            val eldest = blocks.entries.iterator()
+            if (eldest.hasNext()) {
+                eldest.next()
+                eldest.remove()
+            }
+        }
+        blocks[offset] = block
     }
 
     private fun fetchBlock(offset: Long): ByteArray {
@@ -62,17 +106,6 @@ internal class SeekableBlockCache(
             )
         }
         return data
-    }
-
-    private fun fetchAndCacheBlock(offset: Long): ByteArray {
-        if (blocks.size >= maxCachedBlocks) {
-            val eldest = blocks.entries.iterator()
-            if (eldest.hasNext()) {
-                eldest.next()
-                eldest.remove()
-            }
-        }
-        return fetchBlock(offset).also { blocks[offset] = it }
     }
 }
 

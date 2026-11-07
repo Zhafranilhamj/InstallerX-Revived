@@ -1126,6 +1126,7 @@
     <string name="local_share_pin">PIN 码（可选）</string>
     <string name="local_share_pin_hint">留空表示允许局域网内任何设备访问；否则需 4-8 位数字。</string>
     <string name="local_share_secure">PIN 保护</string>
+    <string name="local_share_pin_warning">PIN 保护已关闭。此网络中的任何设备都可以向本机发送安装包。</string>
     <string name="local_share_start">启动服务器</string>
     <string name="local_share_stop">停止服务器</string>
     <string name="local_share_running">服务器运行中</string>
@@ -1173,5 +1174,39 @@
     <string name="intake_downloading">正在下载安装包…</string>
     <string name="intake_download_failed">下载失败：%1$s</string>
     <string name="intake_invalid_link">此链接不是受支持的安装包网址。</string>
+    <string name="intake_confirm_message">确认从此地址下载：\n%1$s</string>
+    <string name="intake_confirm_action">下载</string>
+    <string name="intake_cancel_action">取消</string>
+    <string name="intake_cancelled">已取消下载。</string>
+    <!-- 安装器需要用户确认的提示 -->
+    <string name="user_action_channel_name">安装确认</string>
+    <string name="user_action_channel_desc">需要点击后系统才会继续的请求。</string>
+    <string name="user_action_notification_title">需要确认</string>
+    <string name="user_action_notification_desc">点击以继续安装 %1$s。</string>
+    <string name="user_action_notification_desc_unknown">点击以继续待处理的操作。</string>
+
+    <!--
+        Technical / brand strings that stay in English in values/strings.xml (translatable="false").
+        They are mirrored here so both locales expose exactly the same key set.
+    -->
+    <string name="app_name" translatable="false">InstallerX Revived</string>
+    <string name="home_lsp_inxlocker_title" translatable="false">InxLocker</string>
+    <string name="combined_description_format" translatable="false">%1$s\n%2$s</string>
+    <string name="theme_settings_predictive_back_animation_miuix" translatable="false">Miuix</string>
+    <string name="config_dexopt_mode_verify" translatable="false">Verify</string>
+    <string name="config_dexopt_mode_speed_profile" translatable="false">Speed Profile</string>
+    <string name="config_dexopt_mode_speed" translatable="false">Speed</string>
+    <string name="config_dexopt_mode_everything" translatable="false">Everything</string>
+    <string name="tag_sdk" translatable="false">SDK</string>
+    <string name="tag_oplus_osdk" translatable="false">Oplus OS SDK</string>
+    <string name="tag_xposed" translatable="false">Xposed</string>
+    <string name="installer_label_unknown" translatable="false">Unknown</string>
+    <string name="installer_package_min_label" translatable="false">Min: </string>
+    <string name="installer_package_target_label" translatable="false">Target: </string>
+    <string name="installer_package_min_sdk_label_short" translatable="false">Min: %1$s</string>
+    <string name="installer_package_target_sdk_label_short" translatable="false">Target: %1$s</string>
+    <string name="installer_package_minOsdkVersion_label" translatable="false">MinOsdkVersion: </string>
+    <string name="installer_package_minOsdkVersion" translatable="false">MinOsdkVersion: %1$s</string>
+    <string name="apex" translatable="false">APEX</string>
 </resources>
 

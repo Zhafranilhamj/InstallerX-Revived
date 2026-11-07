@@ -442,9 +442,21 @@ class InstallerActivity :
     override fun onDestroy() {
         job?.cancel()
         job = null
+        // A finishing activity has no UI left to drive the session. If the flow already reached a
+        // terminal state, release it here; otherwise the singleton manager would keep the
+        // repository alive for the rest of the process.
+        val currentSession = session
+        if (isFinishing && currentSession != null && latestProgress.isSessionTerminal()) {
+            Timber.d("[id=${currentSession.id}] onDestroy: session is terminal and the activity is finishing. Closing.")
+            runCatching { currentSession.close() }
+                .onFailure { error -> Timber.w(error, "onDestroy: session close failed") }
+        }
         Timber.d("onDestroy: Activity is being destroyed. Job cancelled.")
         super.onDestroy()
     }
+
+    /** Progress states after which the collection of a session is no longer needed. */
+    private fun ProgressEntity.isSessionTerminal(): Boolean = this is ProgressEntity.Finish || isInstallTerminalResult()
 
     private fun restoreInstaller(savedInstanceState: Bundle? = null) {
         val sessionId =

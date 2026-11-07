@@ -23,6 +23,7 @@ import com.rosan.installer.domain.session.repository.NetworkResolver
 import com.rosan.installer.domain.settings.model.config.NetworkSourceMode
 import com.rosan.installer.domain.settings.model.preferences.HttpProfile
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
+import com.rosan.installer.domain.share.model.LocalShareProtocol
 import com.rosan.installer.util.isZipMagicNumber
 import java.io.File
 import java.io.FilterInputStream
@@ -562,13 +563,15 @@ class OkHttpNetworkResolver(
 
                     // Calculate current integer percentage (0-100)
                     val currentPercent = ((currentTotal.toDouble() / totalSize) * 100).toInt()
-                    val lastPercent = lastEmittedPercent.get()
 
-                    // Only acquire lock and emit if the percentage has increased by at least 1%
-                    if (currentPercent > lastPercent) {
-                        // CompareAndSet ensures only ONE thread emits for this percentage step
-                        if (lastEmittedPercent.compareAndSet(lastPercent, currentPercent)) {
-                            progressMutex.withLock {
+                    // Only emit when the integer percentage actually advanced. The check *and* the
+                    // update both happen under the mutex: a compare-and-set outside the lock let a
+                    // later chunk win the race and emit 60% before an earlier chunk emitted 55%,
+                    // making the progress bar jump backwards.
+                    if (currentPercent > lastEmittedPercent.get()) {
+                        progressMutex.withLock {
+                            if (currentPercent > lastEmittedPercent.get()) {
+                                lastEmittedPercent.set(currentPercent)
                                 progressFlow.emit(ProgressEntity.InstallPreparing(currentPercent / 100f))
                             }
                         }
@@ -748,10 +751,12 @@ class OkHttpNetworkResolver(
                 )
 
                 HttpProfile.ALLOW_LOCAL -> {
-                    if (host != "localhost" && host != "127.0.0.1" && host != "::1") {
+                    // The platform network security config can only name loopback, so LAN peers are
+                    // gated here, where the effective host is known.
+                    if (!isLocalPeerHost(host)) {
                         throw ResolveException(
                             errorType = ResolveErrorType.HTTP_RESTRICTED_FOR_LOCALHOST,
-                            message = "Cleartext HTTP allowed only for localhost.",
+                            message = "Cleartext HTTP allowed only for loopback or LAN peers.",
                         )
                     }
                 }
@@ -761,5 +766,16 @@ class OkHttpNetworkResolver(
                 }
             }
         }
+    }
+
+    /**
+     * Cleartext is only a privacy concern for traffic that leaves the machine or the LAN, and the
+     * network security config cannot name RFC1918 ranges. Loopback, RFC1918, link-local and ULA
+     * peers are therefore treated as local; everything else needs TLS.
+     */
+    private fun isLocalPeerHost(host: String): Boolean {
+        if (host == "localhost") return true
+        val literal = host.removePrefix("[").removeSuffix("]")
+        return LocalShareProtocol.isLocalPeer(literal)
     }
 }

@@ -9,6 +9,8 @@
 
 [versions]
 agp = "9.4.1"
+# apksig is published in lockstep with AGP; keep the two aligned when bumping.
+apksig = "9.4.1"
 biometric = "1.4.0-alpha07"
 focusApi = "1.4"
 kotlin = "2.4.21"
@@ -69,6 +71,7 @@ spotless-plugin-gradle = { module = "com.diffplug.spotless:spotless-plugin-gradl
 ktlint-cli = { module = "com.pinterest.ktlint:ktlint-cli", version.ref = "ktlint" }
 compose-ktlint-rules = { module = "io.nlopez.compose.rules:ktlint", version.ref = "composeKtlintRules" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+apksig = { module = "com.android.tools.build:apksig", version.ref = "apksig" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidx-annotation" }

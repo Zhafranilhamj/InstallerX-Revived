@@ -9,11 +9,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -29,6 +32,7 @@ import com.rosan.installer.data.share.LocalShareManager
 import com.rosan.installer.domain.downloader.model.DownloadStatus
 import com.rosan.installer.domain.downloader.repository.DownloadRepository
 import com.rosan.installer.domain.share.model.LocalShareProtocol
+import com.rosan.installer.domain.share.model.PackageLinkPolicy
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,12 +53,17 @@ class LinkIntakeActivity :
     private val downloadRepository: DownloadRepository by inject()
     private val localShareManager: LocalShareManager by inject()
     private val status = MutableStateFlow("")
+    private val awaitingConfirmation = MutableStateFlow(false)
+    private val downloadInFlight = MutableStateFlow(false)
     private var downloadJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        status.value = getString(R.string.intake_working)
         setContent {
             val message by status.collectAsStateWithLifecycle()
+            val awaiting by awaitingConfirmation.collectAsStateWithLifecycle()
+            val downloading by downloadInFlight.collectAsStateWithLifecycle()
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Column(
@@ -62,9 +71,26 @@ class LinkIntakeActivity :
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
                     ) {
-                        CircularProgressIndicator()
-                        Text(text = message.ifBlank { stringResource(R.string.intake_working) })
-                        Button(onClick = { finish() }) { Text(stringResource(R.string.close)) }
+                        if (awaiting) {
+                            Text(text = message.ifBlank { stringResource(R.string.intake_working) })
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                            ) {
+                                Button(
+                                    onClick = { confirmDownload() },
+                                    enabled = !downloading,
+                                ) { Text(stringResource(R.string.intake_confirm_action)) }
+                                OutlinedButton(
+                                    onClick = { cancelDownload() },
+                                    enabled = !downloading,
+                                ) { Text(stringResource(R.string.intake_cancel_action)) }
+                            }
+                        } else {
+                            CircularProgressIndicator()
+                            Text(text = message.ifBlank { stringResource(R.string.intake_working) })
+                            Button(onClick = { finish() }) { Text(stringResource(R.string.close)) }
+                        }
                     }
                 }
             }
@@ -80,7 +106,6 @@ class LinkIntakeActivity :
 
     // Pending URL awaiting user confirmation
     private var pendingUrl: String? = null
-    private var awaitingConfirmation = false
 
     private fun handleIntent(incoming: Intent?) {
         val data = incoming?.data
@@ -123,63 +148,51 @@ class LinkIntakeActivity :
     }
 
     private fun requestConfirmation(url: String) {
-        // Validate host and extension before confirmation
         if (!isAllowedUrl(url)) {
             fail(R.string.intake_invalid_link)
-            Timber.w("Blocked untrusted intake URL: $url")
+            Timber.w("Blocked untrusted intake URL")
             return
         }
         pendingUrl = url
-        awaitingConfirmation = true
         status.value = getString(R.string.intake_confirm_message, url)
-        // UI will show confirmation buttons; for now auto-update status to allow confirmation flow
-        // The Compose UI layer should present Confirm/Cancel - we emit status for legacy UI
+        awaitingConfirmation.value = true
     }
 
     fun confirmDownload() {
         val url = pendingUrl ?: return
-        awaitingConfirmation = false
+        if (downloadJob?.isActive == true || downloadInFlight.value) return
+        awaitingConfirmation.value = false
         startDownload(url)
     }
 
     fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        downloadInFlight.value = false
         pendingUrl = null
-        awaitingConfirmation = false
-        fail(R.string.intake_invalid_link)
+        awaitingConfirmation.value = false
+        status.value = getString(R.string.intake_cancelled)
     }
 
-    private fun isAllowedUrl(url: String): Boolean {
-        val uri = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return false
-        val scheme = uri.scheme?.lowercase() ?: return false
-        if (scheme !in setOf("http", "https")) return false
-        // Require package-like extension or mime hint; block arbitrary hosts if desired
-        val path = uri.path.orEmpty().lowercase()
-        val allowedExtensions = listOf(".apk", ".apks", ".apkm", ".xapk", ".zip", ".apks.zip")
-        // Allow any https host but enforce extension check
-        if (allowedExtensions.none { path.endsWith(it) }) {
-            Timber.w("URL missing package extension: $url")
-            return false
-        }
-        // Basic host allow-list: block private IPs and non-https for downloads from http if needed
-        val host = uri.host?.lowercase().orEmpty()
-        if (host.isBlank()) return false
-        // Block localhost/private bypass attempts
-        if (host == "localhost" || host.startsWith("127.") || host == "::1") return false
-        return true
-    }
+    private fun isAllowedUrl(url: String): Boolean = PackageLinkPolicy.isAllowedPackageUrl(url)
 
     private fun startDownload(url: String) {
         downloadJob?.cancel()
         downloadJob = lifecycleScope.launch {
+            downloadInFlight.value = true
             status.value = getString(R.string.intake_downloading)
-            val result = downloadRepository.download(url)
-            val record = result.getOrNull()
-            if (record != null && record.status == DownloadStatus.COMPLETED && record.localPath.isNotBlank()) {
-                openInstaller(File(record.localPath))
-            } else {
-                val reason = record?.error ?: result.exceptionOrNull()?.message.orEmpty()
-                status.value = getString(R.string.intake_download_failed, reason.ifBlank { "unknown error" })
-                Timber.w("Package link intake failed: $reason")
+            try {
+                val result = downloadRepository.download(url)
+                val record = result.getOrNull()
+                if (record != null && record.status == DownloadStatus.COMPLETED && record.localPath.isNotBlank()) {
+                    openInstaller(File(record.localPath))
+                } else {
+                    val reason = record?.error ?: result.exceptionOrNull()?.message.orEmpty()
+                    status.value = getString(R.string.intake_download_failed, reason.ifBlank { "unknown error" })
+                    Timber.w("Package link intake failed")
+                }
+            } finally {
+                downloadInFlight.value = false
             }
         }
     }

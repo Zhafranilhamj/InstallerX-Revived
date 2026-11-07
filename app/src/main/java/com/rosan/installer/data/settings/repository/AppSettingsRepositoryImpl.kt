@@ -29,6 +29,7 @@ import com.rosan.installer.domain.settings.repository.IntSetting
 import com.rosan.installer.domain.settings.repository.NamedPackageListSetting
 import com.rosan.installer.domain.settings.repository.SharedUidListSetting
 import com.rosan.installer.domain.settings.repository.StringSetting
+import com.rosan.installer.framework.security.SecretCipher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -135,7 +136,8 @@ class AppSettingsRepositoryImpl(
             githubUpdateChannel = githubUpdateChannel,
             customGithubProxyUrl = customGithubProxyUrl,
             // VirusTotal
-            virusTotalApiKey = prefs[AppDataStore.VIRUSTOTAL_API_KEY] ?: "",
+            // Stored encrypted at rest; a legacy plaintext value is still accepted.
+            virusTotalApiKey = SecretCipher.decrypt(prefs[AppDataStore.VIRUSTOTAL_API_KEY] ?: "").orEmpty(),
             virusTotalScanMode = VirusTotalScanMode.fromValueOrDefault(
                 prefs[AppDataStore.VIRUSTOTAL_SCAN_MODE],
             ),
@@ -188,9 +190,18 @@ class AppSettingsRepositoryImpl(
         replay = 1,
     )
 
-    override suspend fun putString(setting: StringSetting, value: String) = appDataStore.putString(stringKey(setting), value)
+    override suspend fun putString(setting: StringSetting, value: String) {
+        // Secrets never reach DataStore in plaintext. Everything else is stored verbatim.
+        val stored = if (setting.isSecret && value.isNotEmpty()) SecretCipher.encrypt(value) else value
+        appDataStore.putString(stringKey(setting), stored)
+    }
 
-    override fun getString(setting: StringSetting, default: String): Flow<String> = appDataStore.getString(stringKey(setting), default)
+    override fun getString(setting: StringSetting, default: String): Flow<String> = appDataStore.getString(stringKey(setting), default).map { value ->
+        if (setting.isSecret) SecretCipher.decrypt(value) ?: default else value
+    }
+
+    private val StringSetting.isSecret: Boolean
+        get() = this == StringSetting.VirusTotalApiKey
 
     override suspend fun putInt(setting: IntSetting, value: Int) = appDataStore.putInt(intKey(setting), value)
 

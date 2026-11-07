@@ -159,3 +159,61 @@ jobs:
           path: app/build/outputs/apk/**/release/mapping.txt
           retention-days: 15
           archive: false
+
+  release_and_lint:
+    name: Release Build & Lint
+    needs: target_check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
+          build-scan-terms-of-use-agree: "yes"
+          build-scan-publish: false
+          cache-read-only: true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # R8/ProGuard rules and shrinker keep-rules are only exercised by a release build, so PRs
+      # must compile the minified variant too.
+      - name: Build Preview Release APK (R8)
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew assemblePreviewRelease --no-configuration-cache -PAPP_ID="com.rosan.installer.x.revived.test"
+
+      # Reporting only for now: the project carries ~1.2k pre-existing lint findings, so making this
+      # blocking would fail every PR. Adopt `lint-baseline.xml` once those are triaged, then drop
+      # `continue-on-error` to turn the step into a ratchet against new issues.
+      - name: Run Android Lint
+        continue-on-error: true
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew :app:lintPreviewRelease --no-configuration-cache -PAPP_ID="com.rosan.installer.x.revived.test"
+
+      - name: Upload Lint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint-report-${{ github.event.pull_request.head.sha }}
+          path: app/build/reports/lint-results-*.html
+          if-no-files-found: warn
+          retention-days: 7
+          archive: false

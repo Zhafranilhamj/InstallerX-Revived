@@ -18,8 +18,9 @@ input{width:100%;box-sizing:border-box}.err{color:#ff8a80}.row{display:flex;gap:
 <form method="post" action="/login"><label for="pin">PIN</label><input id="pin" name="pin" inputmode="numeric" autocomplete="off" autofocus>
 <button type="submit" style="margin-top:16px;width:100%">Unlock</button></form></div></body></html>"""
 
-    fun mainPage(pinEnabled: Boolean, versionName: String): String = """<!doctype html>
+    fun mainPage(pinEnabled: Boolean, versionName: String, csrfToken: String): String = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="csrf-token" content="${escapeHtml(csrfToken)}">
 <title>InstallerX - Local sharing</title><style>
 body{font-family:system-ui,sans-serif;background:#10131a;color:#eef1f7;margin:0;padding:24px}
 .card{max-width:640px;margin:5vh auto;background:#1c2130;border-radius:18px;padding:28px;box-shadow:0 12px 40px #0006}
@@ -35,16 +36,18 @@ ul{padding-left:18px}li{margin:4px 0;color:#c8d0e0}
 <div class="drop" id="drop">Drop a package here or <strong>browse</strong><input id="file" type="file" multiple accept=".apk,.apks,.apkm,.xapk,.zip,.obb"></div>
 <div id="status"></div>
 <h2>Received files</h2><ul id="files"><li class="muted">Loading…</li></ul>
-<p class="muted">Local network only. """ + (if (pinEnabled) "PIN protection is on." else "PIN protection is off.") + " · " + escapeHtml(versionName) + """</p>
+<p class="muted">Local network only. """ + (if (pinEnabled) "PIN protection is on." else "PIN protection is <strong style=\"color:#ff8a80\">off</strong>: anyone on this network can push a package to this device.") + " · " + escapeHtml(versionName) + """</p>
 </div><script>
+var csrfMeta=document.querySelector('meta[name=csrf-token]');
+var csrf=csrfMeta?csrfMeta.getAttribute('content'):'';
 var fileInput=document.getElementById('file');var drop=document.getElementById('drop');var status=document.getElementById('status');
-function refresh(){fetch('/api/files').then(function(r){return r.json()}).then(function(d){var ul=document.getElementById('files');ul.innerHTML='';
+function refresh(){fetch('/api/files',{headers:{'X-CSRF-Token':csrf}}).then(function(r){return r.json()}).then(function(d){var ul=document.getElementById('files');ul.innerHTML='';
 if(!d.files||!d.files.length){ul.innerHTML='<li class="muted">Nothing received yet</li>';return}
 d.files.forEach(function(n){var li=document.createElement('li');li.textContent=n;ul.appendChild(li)})}).catch(function(){})}
 function upload(files){if(!files||!files.length)return;var list=Array.prototype.slice.call(files);var sent=0;
 function next(){if(!list.length){status.textContent='Sent '+sent+' file(s) to the installer.';refresh();return}
 var f=list.shift();status.textContent='Uploading '+f.name+'…';var fd=new FormData();fd.append('file',f,f.name);
-fetch('/upload',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){
+fetch('/upload',{method:'POST',headers:{'X-CSRF-Token':csrf},body:fd}).then(function(r){return r.json()}).then(function(d){
 if(d.ok){sent++;next()}else{status.textContent='Upload failed: '+(d.error||'unknown error')}})
 .catch(function(e){status.textContent='Upload failed: '+e})}next()}
 drop.addEventListener('click',function(){fileInput.click()});

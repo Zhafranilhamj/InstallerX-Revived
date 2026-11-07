@@ -62,17 +62,50 @@ fun SendToTvPage() {
         }
     }
 
+    // Only one cached copy is kept at a time: the previous selection is deleted as soon as a new
+    // document is chosen or the push finishes, so `cacheDir/tv_push` cannot grow without bound.
+    fun discardCachedFile() {
+        selectedFile?.let { cached ->
+            runCatching { cached.delete() }
+            selectedFile = null
+        }
+    }
+
     val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        discardCachedFile()
         val name = uri.lastPathSegment?.substringAfterLast('/')?.filter { it.isLetterOrDigit() || it in "._-" }
             ?.takeIf { it.isNotBlank() } ?: "package.apk"
-        val target = File(context.cacheDir, "tv_push/$name").apply { parentFile?.mkdirs() }
+        val directory = File(context.cacheDir, "tv_push").apply { mkdirs() }
+        // Stale copies from a previous process are dropped before a new transfer starts.
+        directory.listFiles().orEmpty().forEach { runCatching { it.delete() } }
+        val target = File(directory, name)
         runCatching {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
-            }
+            val copied = context.contentResolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { output ->
+                    var total = 0L
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        // Never stage more than the server would accept anyway.
+                        if (total > LocalShareProtocol.MAX_UPLOAD_BYTES) {
+                            throw IllegalStateException("Selected file is larger than the sharing limit")
+                        }
+                        output.write(buffer, 0, read)
+                    }
+                    total
+                }
+            } ?: throw IllegalStateException("The selected document could not be read")
+            if (copied <= 0L) throw IllegalStateException("The selected document is empty")
             selectedFile = target
-        }.onFailure { resultText = it.message.orEmpty() }
+            resultText = ""
+        }.onFailure {
+            runCatching { target.delete() }
+            selectedFile = null
+            resultText = it.message.orEmpty()
+        }
     }
 
     ToolsScaffold(title = stringResource(R.string.send_to_tv_title)) {
@@ -115,12 +148,17 @@ fun SendToTvPage() {
 
                         else -> scope.launch {
                             sending = true
-                            val outcome = client.push(endpoint, file)
-                            sending = false
-                            resultText = outcome.fold(
-                                onSuccess = { context.getString(R.string.send_to_tv_success) },
-                                onFailure = { context.getString(R.string.send_to_tv_failed, it.message.orEmpty()) },
-                            )
+                            try {
+                                val outcome = client.push(endpoint, file)
+                                resultText = outcome.fold(
+                                    onSuccess = { context.getString(R.string.send_to_tv_success) },
+                                    onFailure = { context.getString(R.string.send_to_tv_failed, it.message.orEmpty()) },
+                                )
+                            } finally {
+                                sending = false
+                                // The staged copy is only needed while the upload runs.
+                                discardCachedFile()
+                            }
                         }
                     }
                 },

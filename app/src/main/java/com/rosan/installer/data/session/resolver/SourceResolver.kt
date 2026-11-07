@@ -470,15 +470,36 @@ class SourceResolver(
             val fd = afd.fileDescriptor
             if (fd.valid() && knownLength > 0) {
                 Timber.d("Attempting NIO FileChannel transfer...")
-                transferWithProgress(
-                    sourceFd = fd,
-                    sourceOffset = afd.startOffset,
-                    destFile = tempFile,
-                    totalSize = knownLength,
-                    progressFlow = progressFlow,
-                )
-                nioSuccess = true
-                Timber.d("NIO transfer successful.")
+                // FileInputStream(FileDescriptor) takes ownership of the descriptor and closes it
+                // when the channel is closed. Wrapping the shared AssetFileDescriptor would kill
+                // the legacy fallback below (and any later read of the same descriptor), so work
+                // on a private duplicate instead.
+                val duplicated = ParcelFileDescriptor.dup(fd)
+                try {
+                    transferWithProgress(
+                        sourceFd = duplicated.fileDescriptor,
+                        sourceOffset = afd.startOffset,
+                        destFile = tempFile,
+                        totalSize = knownLength,
+                        progressFlow = progressFlow,
+                    )
+                } finally {
+                    // transferWithProgress closes the descriptor it was handed; this is only a
+                    // safety net for the paths where it never opened a stream.
+                    runCatching { duplicated.close() }
+                }
+                nioSuccess = tempFile.length() == knownLength
+                if (!nioSuccess) {
+                    Timber.w(
+                        "NIO transfer produced %d of %d bytes, falling back to stream copy.",
+                        tempFile.length(),
+                        knownLength,
+                    )
+                    tempFile.delete()
+                    tempFile.createNewFile()
+                } else {
+                    Timber.d("NIO transfer successful.")
+                }
             }
         } catch (e: Exception) {
             Timber.w(e, "NIO transfer failed, falling back to legacy stream copy.")

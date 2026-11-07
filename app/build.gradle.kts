@@ -77,15 +77,9 @@ android {
                 signingConfigs.getByName("debug")
             }
             vcsInfo.include = false
+            // Keep rules are picked up from the app/src/main/keepRules source set (AGP 9.3+),
+            // so they do not need to be listed here.
             optimization.enable = true
-            optimization.keepRules.files(
-                file("src/main/keepRules/android-components.keep"),
-                file("src/main/keepRules/apksig.keep"),
-                file("src/main/keepRules/app-process.keep"),
-                file("src/main/keepRules/ignore-warnings.keep"),
-                file("src/main/keepRules/privileged-installer.keep"),
-                file("src/main/keepRules/installerx-app.keep"),
-            )
         }
         create("nonMinifiedRelease") {
             signingConfig = if (hasCustomSigning) {
@@ -166,8 +160,11 @@ aboutLibraries {
     }
 }
 
-// Use the apksig implementation bundled with the lowest installed Build Tools version that
-// supports the signature schemes handled by the app. Newer Build Tools retain this support.
+// Signature analysis in `PendingApkSignatureAnalyzer` uses the V3.2 hybrid / PQC signer API
+// (`ApkVerifier.Result.v32SchemeSigner`, `classicalSignerInfo`, `pqcSignerInfo`), which is only
+// published inside build-tools >= 37 `lib/apksigner.jar`; the released `com.android.tools.build:apksig`
+// artifacts do not expose it yet. Build Tools are therefore still required by default, and
+// `-PuseLocalApksigJar=false` opts into the Maven artifact instead (for tooling checks only).
 private val minApksignerBuildTools = "37.0.0"
 
 private fun buildToolsVersionParts(version: String): List<Int> = version
@@ -201,6 +198,10 @@ val apksignerJar = androidComponents.sdkComponents.sdkDirectory.map { sdkDirecto
     selectApksignerJar(sdkDirectory.asFile)
 }
 
+// Default: the SDK `apksigner.jar`, because it is the only source of the V3.2 hybrid signer API.
+// Pass `-PuseLocalApksigJar=false` to compile against `com.android.tools.build:apksig` from Maven.
+val useLocalApksigJar = (project.findProperty("useLocalApksigJar") as String?)?.toBoolean() != false
+
 room3 {
     // Specify the schema directory
     schemaDirectory("$projectDir/schemas")
@@ -215,7 +216,11 @@ dependencies {
     implementation(libs.commons.compress)
     implementation(libs.xz)
     implementation(libs.androidx.profileinstaller)
-    implementation(files(apksignerJar))
+    if (useLocalApksigJar) {
+        implementation(files(apksignerJar))
+    } else {
+        implementation(libs.apksig)
+    }
     "baselineProfile"(project(":baselineprofile"))
     compileOnly(project(":hidden-api"))
     implementation(libs.androidx.core)

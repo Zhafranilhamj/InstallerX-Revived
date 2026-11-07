@@ -14,12 +14,17 @@ import com.rosan.installer.ui.activity.InstallerActivity
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /** Owns the built-in HTTP server and the "Send to TV" QR handshake state. */
@@ -34,12 +39,43 @@ class LocalShareManager(
     private val _pendingEndpoint = MutableStateFlow<LocalShareEndpoint?>(null)
     val pendingEndpoint: StateFlow<LocalShareEndpoint?> = _pendingEndpoint.asStateFlow()
 
+    @Volatile
     private var server: LocalHttpServer? = null
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Invoked when the network policy stops the server, so the service can tear itself down. */
+    @Volatile
+    var onStoppedByNetworkPolicy: (() -> Unit)? = null
+
+    /**
+     * Cached copy of the in-app network switch. The HTTP server calls this from worker threads for
+     * every request, so it must not suspend.
+     */
+    private val networkAllowed = AtomicBoolean(false)
+
+    init {
+        scope.launch {
+            appSettingsRepository.preferencesFlow
+                .map { it.allowInternetAccess }
+                .distinctUntilChanged()
+                .collect { allowed ->
+                    networkAllowed.set(allowed)
+                    if (!allowed && server != null) {
+                        // Never keep listening once the user revokes network access: an open LAN
+                        // port would still accept uploads.
+                        Timber.i("Network access revoked; stopping the local sharing server")
+                        stop()
+                        onStoppedByNetworkPolicy?.invoke()
+                    }
+                }
+        }
+    }
 
     fun start(config: LocalShareConfig): Result<Unit> {
         if (!config.valid) return Result.failure(IllegalArgumentException("Invalid port or PIN"))
         // The runtime network boundary also covers accepting local-network connections.
-        if (!runBlocking { appSettingsRepository.preferencesFlow.first().allowInternetAccess }) {
+        if (!networkAllowed.get()) {
             return Result.failure(IllegalStateException("Network access is disabled in settings"))
         }
         stop()
@@ -53,6 +89,7 @@ class LocalShareManager(
                 versionName = AppConfig.VERSION_NAME,
                 onFileReceived = ::onFileReceived,
                 onError = { message -> _state.update { it.copy(lastError = message) } },
+                networkAllowed = { networkAllowed.get() },
             )
             instance.start()
             server = instance

@@ -1,11 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
+    <!--
+        Android's network security config cannot express CIDR ranges or LAN wildcards: only exact
+        domain names (plus optional sub-domains) may be allow-listed for cleartext traffic. A
+        domain-config listing 127.0.0.1/localhost therefore cannot cover the dynamic 192.168.x.x /
+        10.x.x.x / 172.16-31.x.x address this app must talk to for "Send to TV" and its own local
+        HTTP dashboard.
+
+        Cleartext is consequently permitted at the platform layer, and the real restriction is
+        enforced in application code, where the actual peer address is known:
+          * OkHttpNetworkResolver.validateSecurity() gates every download through HttpProfile and
+            rejects cleartext unless the profile allows it (ALLOW_LOCAL additionally requires an
+            RFC1918 / loopback / link-local peer).
+          * LocalShareClient refuses to push a package to any host that is not a local peer.
+          * LocalHttpServer only accepts connections from local peers (isLocalPeer).
+        Keep these three checks in sync when touching networking code.
+    -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <!-- Only allow cleartext for local loopback / LAN sharing -->
+    <!-- Loopback stays explicit: it is the only address range the platform can name precisely. -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">127.0.0.1</domain>
         <domain includeSubdomains="false">localhost</domain>

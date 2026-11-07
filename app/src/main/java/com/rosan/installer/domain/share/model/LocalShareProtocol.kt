@@ -4,6 +4,7 @@ package com.rosan.installer.domain.share.model
 
 import java.net.URI
 import java.security.MessageDigest
+import java.security.SecureRandom
 
 /** Connection details encoded in the QR code shown by the TV-side dashboard. */
 data class LocalShareEndpoint(
@@ -21,6 +22,14 @@ object LocalShareProtocol {
     const val MAX_UPLOAD_BYTES = 1024L * 1024 * 1024
 
     fun isValidPort(port: Int): Boolean = port in 1024..65535
+
+    /**
+     * Generates a 6-digit PIN from [SecureRandom].
+     *
+     * `(100000..999999).random()` shares a single seeded [kotlin.random.Random] with the rest of
+     * the app, so the PIN sequence is predictable from any other observed random value.
+     */
+    fun generatePin(random: SecureRandom = SecureRandom()): String = (100000 + random.nextInt(900000)).toString()
 
     /** An empty PIN disables security; otherwise 4-8 digits are required. */
     fun isValidPin(pin: String): Boolean = pin.isEmpty() || (pin.length in 4..8 && pin.all { it in '0'..'9' })
@@ -60,28 +69,19 @@ object LocalShareProtocol {
         return LocalShareEndpoint(baseUrl, pin)
     }
 
-    private const val PIN_SALT = "InstallerX-Salt-v1"
-    private const val PIN_ITERATIONS = 1000
-    fun pinToken(pin: String): String {
-        var data = (PIN_SALT + pin).toByteArray(Charsets.UTF_8)
-        repeat(PIN_ITERATIONS) { data = MessageDigest.getInstance("SHA-256").digest(data) }
-        return data.joinToString("") { "%02x".format(it) }
+    /**
+     * Constant-time comparison of a submitted PIN against the configured one.
+     *
+     * The comparison runs over SHA-256 digests, so it neither leaks the length of the secret nor
+     * short-circuits on the first differing character.
+     */
+    fun matchesPin(configuredPin: String, suppliedPin: String?): Boolean {
+        if (configuredPin.isEmpty()) return true
+        val candidate = suppliedPin?.takeIf(::isValidPin) ?: return false
+        return MessageDigest.isEqual(sha256(configuredPin), sha256(candidate))
     }
 
-    /** Constant-time comparison of the PIN-derived session token. */
-    fun isAuthorized(
-        configuredPin: String,
-        cookieToken: String?,
-        suppliedPin: String?,
-    ): Boolean {
-        if (configuredPin.isEmpty()) return true
-        val expected = pinToken(configuredPin).toByteArray(Charsets.US_ASCII)
-        val candidates = listOfNotNull(
-            cookieToken?.toByteArray(Charsets.US_ASCII),
-            suppliedPin?.takeIf(::isValidPin)?.let { pinToken(it).toByteArray(Charsets.US_ASCII) },
-        )
-        return candidates.any { MessageDigest.isEqual(expected, it) }
-    }
+    private fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
 
     /** Accepts only RFC1918 / loopback / link-local peers, never a public WAN address. */
     fun isLocalPeer(hostAddress: String): Boolean {

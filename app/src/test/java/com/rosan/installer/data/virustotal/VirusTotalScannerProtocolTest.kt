@@ -53,6 +53,29 @@ class VirusTotalScannerProtocolTest {
     }
 
     @Test
+    fun `api key validation keeps the key out of the request url`() = runTest {
+        server.enqueue(MockResponse(body = """{"data":{"type":"ip_address","id":"8.8.8.8"}}"""))
+        val result = scanner.validateApiKey(KEY)
+        val request = takeRequest()
+        assertTrue(result.isSuccess, "A 200 response must validate the key")
+        assertEquals("/api/v3/ip_addresses/8.8.8.8", request.url.encodedPath)
+        assertTrue(!request.url.toString().contains(KEY), "The API key must never appear in a URL")
+        assertEquals(KEY, request.headers["x-apikey"])
+    }
+
+    @Test
+    fun `a missing report still proves the key was accepted`() = runTest {
+        server.enqueue(MockResponse(code = 404, body = "{}"))
+        assertTrue(scanner.validateApiKey(KEY).isSuccess)
+    }
+
+    @Test
+    fun `an unauthorized validation response fails the key`() = runTest {
+        server.enqueue(MockResponse(code = 401, body = "{}"))
+        assertTrue(scanner.validateApiKey(KEY).isFailure)
+    }
+
+    @Test
     fun `small files use the standard endpoint and stream a stable hash`() = runTest {
         val file = tempFile().apply { writeText("small apk payload") }
         try {

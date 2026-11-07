@@ -5,6 +5,7 @@ package com.rosan.installer.data.engine.executor
 import com.rosan.installer.domain.engine.exception.ModuleInstallException
 import com.rosan.installer.domain.engine.model.packageinfo.AppEntity
 import com.rosan.installer.domain.engine.model.source.DataEntity
+import com.rosan.installer.domain.settings.model.preferences.RootMode
 import java.io.File
 import java.nio.channels.FileChannel
 import java.nio.file.Files
@@ -14,6 +15,8 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ModuleInstallerUtilsTest {
     private lateinit var tempDirectory: File
@@ -56,6 +59,57 @@ class ModuleInstallerUtilsTest {
 
         assertFailsWith<ModuleInstallException> {
             ModuleInstallerUtils.getModulePathOrThrow(module(data))
+        }
+    }
+
+    @Test
+    fun `single quotes every shell metacharacter in the module path`() {
+        val hostilePaths = listOf(
+            "/data/local/tmp/it's.zip",
+            "/data/local/tmp/say \"hi\".zip",
+            "/data/local/tmp/$(reboot).zip",
+            "/data/local/tmp/`id`.zip",
+            "/data/local/tmp/*.zip",
+            "/data/local/tmp/with space.zip",
+            "/data/local/tmp/new\nline.zip",
+        )
+
+        for (path in hostilePaths) {
+            val command = ModuleInstallerUtils.buildShellCommandString(RootMode.Magisk, path)
+
+            // The whole path must live inside one single-quoted segment, so the shell never
+            // expands it. Expected value computed independently of the production helper.
+            val quoted = "'" + path.replace("'", "'\\''") + "'"
+            assertTrue(command.endsWith(quoted), "Unquoted path in: $command")
+            assertFalse(command.contains("\"$path\""), "Double-quoted path in: $command")
+        }
+    }
+
+    @Test
+    fun `a quote in the path cannot terminate the quoted segment`() {
+        val command = ModuleInstallerUtils.buildShellCommandString(
+            RootMode.KernelSU,
+            "/data/local/tmp/x'; reboot; echo '.zip",
+        )
+
+        assertEquals(
+            "ksud module install '/data/local/tmp/x'\\''; reboot; echo '\\''.zip'",
+            command,
+        )
+    }
+
+    @Test
+    fun `each root implementation keeps its own binary`() {
+        assertEquals(
+            "magisk --install-module '/tmp/m.zip'",
+            ModuleInstallerUtils.buildShellCommandString(RootMode.Magisk, "/tmp/m.zip"),
+        )
+        assertEquals(
+            "apd module install '/tmp/m.zip'",
+            ModuleInstallerUtils.buildShellCommandString(RootMode.APatch, "/tmp/m.zip"),
+        )
+        assertFailsWith<IllegalStateException> {
+            ModuleInstallerUtils.buildShellCommandString(RootMode.None, "/tmp/m.zip")
         }
     }
 

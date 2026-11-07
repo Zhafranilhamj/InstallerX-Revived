@@ -41,7 +41,6 @@ import com.rosan.installer.domain.settings.model.config.Authorizer
 import com.rosan.installer.domain.settings.model.config.ConfigModel
 import com.rosan.installer.domain.settings.model.preferences.RootMode
 import com.rosan.installer.domain.settings.model.preferences.SmartAuthorizerPreferences
-import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.domain.settings.repository.BooleanSetting
 import com.rosan.installer.domain.settings.repository.NamedPackageListSetting
@@ -97,9 +96,6 @@ class ProcessInstallationUseCase(
             Timber.w("ProcessInstallationUseCase: No entities selected for installation.")
             throw IllegalStateException("No items selected")
         }
-
-        // Enforce VirusTotal STRICT gate centrally (not just UI): block all install paths if malware
-        checkVirusTotalStrictBlocked(config, analysisResults)
 
         val firstApp = selected.first().app
 
@@ -546,28 +542,3 @@ internal fun SigningBlockCertificateStatus.isBlockedByUnknownPolicy(allowSigUnkn
     SigningBlockCertificateStatus.NOT_INSTALLED,
     -> false
 }
-
-    private suspend fun checkVirusTotalStrictBlocked(config: ConfigModel, results: List<PackageAnalysisResult>) {
-        // Central enforcement for STRICT mode - read from AppSettings
-        val mode = runCatching { appSettingsRepo.getString(StringSetting.VirusTotalScanMode).first() }.getOrNull()?.let {
-            VirusTotalScanMode.fromValueOrDefault(it)
-        } ?: return
-        if (mode != VirusTotalScanMode.STRICT) return
-        // If any result has been flagged as malware in prior scan metadata, block
-        // We check if any selected entity has a VirusTotal report marked malicious
-        // For now, rely on analysisResults containing pending scan state via config flag
-        // This gate ensures batch/multi-APK and auto-install are blocked, not just UI button
-        val blocked = results.any { result ->
-            result.appEntities.any { it.selected && it.app.packageName.isNotBlank() } &&
-            // If STRICT, require that check has been performed; if not, defer to allow scan to happen
-            false // placeholder for future report attachment; central gate via UI state not bypassable here
-        }
-        if (blocked) {
-            throw InstallException(
-                InstallErrorType.BLOCKED_BY_VIRUSTOTAL,
-                "Installation blocked: VirusTotal strict mode detected malware"
-            )
-        }
-        // Additional gate: if caller explicitly marks malware via tag, block
-        // This is enforced via InstallViewModel scanning; batch installs funnel through same UseCase
-    }

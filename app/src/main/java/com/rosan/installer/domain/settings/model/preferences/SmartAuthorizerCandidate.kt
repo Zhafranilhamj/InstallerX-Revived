@@ -38,8 +38,12 @@ object SmartAuthorizerPreferences {
 
         if (parsed.isEmpty()) return defaultCandidates(isSessionInstallSupported)
 
-        // Do not re-append authorizers user intentionally removed/disabled; respect explicit list
-        return parsed
+        // Authorizers missing from a stored list come from an older build that predates them.
+        // Only existing stored entries are treated as an explicit user decision.
+        val missing = defaultCandidates(isSessionInstallSupported)
+            .filterNot { candidate -> parsed.any { it.authorizer == candidate.authorizer } }
+
+        return parsed + missing
     }
 
     fun encode(candidates: List<SmartAuthorizerCandidate>): String = candidates

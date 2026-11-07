@@ -19,11 +19,10 @@ import com.rosan.installer.domain.engine.exception.AnalyseException
 import com.rosan.installer.domain.engine.exception.AuthenticationFailedException
 import com.rosan.installer.domain.engine.exception.DescriptorAnalysisUnsupportedException
 import com.rosan.installer.domain.engine.exception.InstallException
-
-private object NoErrorSentinel : Throwable("No error", null, false, false)
 import com.rosan.installer.domain.engine.model.AnalyseExtraEntity
 import com.rosan.installer.domain.engine.model.error.AnalyseErrorType
 import com.rosan.installer.domain.engine.model.error.InstallErrorType
+import com.rosan.installer.domain.engine.model.error.NoError
 import com.rosan.installer.domain.engine.model.install.InstallMetadata
 import com.rosan.installer.domain.engine.model.install.InstallPhase
 import com.rosan.installer.domain.engine.model.install.SessionMode
@@ -90,6 +89,9 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
 
     // A separate job for the current heavy task (Resolve, Install, etc.)
     private var processingJob: Job? = null
+
+    // onFinish can be reached more than once (session Finish, service destroy, UI teardown).
+    private val finishHandled = java.util.concurrent.atomic.AtomicBoolean(false)
 
     // Helper property to get ID for logging
     private val sessionId get() = session.id
@@ -244,10 +246,19 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
     }
 
     override suspend fun onFinish() {
+        if (!finishHandled.compareAndSet(false, true)) {
+            Timber.d("[id=$sessionId] onFinish: already handled, ignoring.")
+            return
+        }
         Timber.d("[id=$sessionId] onFinish: Cleaning up resources and cancelling job.")
         clearCache()
         processingJob?.cancel()
         job?.cancel()
+        // Every flow that ends in ProgressEntity.Finish (cancel, ignore, unarchive, reboot) leaves
+        // the repository registered in the singleton manager. close() is idempotent and removes it,
+        // so a finished session can never keep a handler scope alive or leak its cache.
+        runCatching { session.close() }
+            .onFailure { error -> Timber.w(error, "[id=$sessionId] onFinish: close() failed") }
     }
 
     private suspend fun handleAction(action: InstallerSessionRepositoryImpl.Action) {
@@ -494,8 +505,11 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
         val queue = session.multiInstallQueue
         if (queue.isEmpty()) return
 
+        // Grouping by package name alone merged *different versions* of the same app into a single
+        // session, which the platform rejects as a split conflict. Keep a version+container key so
+        // real splits stay together while genuinely distinct packages install sequentially.
         val groupedQueue: List<List<SelectInstallEntity>> = queue
-            .groupBy { it.app.packageName }
+            .groupBy { it.batchGroupingKey() }
             .values
             .toList()
 
@@ -547,6 +561,10 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
                 } else {
                     throw IllegalStateException("Original package info not found")
                 }
+            } catch (e: CancellationException) {
+                // A user cancellation is not an install failure: swallowing it here recorded a
+                // failed install and then emitted InstallCompleted over the cancelled session.
+                throw e
             } catch (e: Exception) {
                 if ((e as? InstallException)?.errorType == InstallErrorType.MISSING_INSTALL_PERMISSION) {
                     Timber.w(e, "Batch install is waiting for unknown source permission.")
@@ -568,6 +586,22 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
 
         // Emit final completion state with results
         session.progress.emit(ProgressEntity.InstallCompleted(session.multiInstallResults.toList()))
+    }
+
+    /**
+     * Batch grouping key: one install session per (package, version, source container).
+     *
+     * Splits of a bundle share all three values and therefore still install together, while a
+     * different version of the same package, or a second standalone APK, gets its own session.
+     */
+    private fun SelectInstallEntity.batchGroupingKey(): Triple<String, Long, String> {
+        val versionCode = when (val entity = app) {
+            is AppEntity.BaseEntity -> entity.versionCode
+            is AppEntity.ModuleEntity -> entity.versionCode
+            else -> -1L
+        }
+        val container = (app.data.getSourceTop() as? DataEntity.FileEntity)?.path.orEmpty()
+        return Triple(app.packageName, versionCode, container)
     }
 
     /**
@@ -1009,7 +1043,7 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
     }
 
     private fun resetState() {
-        session.error = NoErrorSentinel
+        session.error = NoError
         session.config = default
         session.sourceUris = emptyList()
         session.referrerUri = null

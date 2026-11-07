@@ -42,13 +42,20 @@ object ModuleInstallerUtils {
     }
 
     /**
+     * POSIX single-quote quoting: `$`, backticks, `"`, `\\` and newlines lose all meaning inside
+     * single quotes, so a hostile path cannot inject a command into `su -c`.
+     */
+    internal fun String.shellSingleQuote(): String = "'" + replace("'", "'\\''") + "'"
+
+    /**
      * Converts raw arguments into a shell-safe command string.
-     * Specifically quotes the file path to prevent shell expansion issues.
+     *
+     * The command is executed through `su -c <string>`, so every argument must be quoted for a
+     * POSIX shell. Double quotes are *not* safe here: `$(...)` and backticks are still expanded
+     * inside them, which allowed a crafted module file name to run commands as root.
      */
     fun buildShellCommandString(rootMode: RootMode, modulePath: String): String {
-        // We manually quote the path for safety when running in "su -c"
-        // Escaping double quotes inside the path just in case
-        val safePath = "\"${modulePath.replace("\"", "\\\"")}\""
+        val safePath = modulePath.shellSingleQuote()
 
         return when (rootMode) {
             RootMode.Magisk -> "magisk --install-module $safePath"

@@ -1146,6 +1146,7 @@
     <string name="local_share_pin">PIN (optional)</string>
     <string name="local_share_pin_hint">Leave empty to allow anyone on the local network. 4-8 digits otherwise.</string>
     <string name="local_share_secure">PIN protection</string>
+    <string name="local_share_pin_warning">PIN protection is off. Any device on this network can send a package to this device.</string>
     <string name="local_share_start">Start server</string>
     <string name="local_share_stop">Stop server</string>
     <string name="local_share_running">Server running</string>
@@ -1196,5 +1197,12 @@
     <string name="intake_confirm_message">Confirm download from:\n%1$s</string>
     <string name="intake_confirm_action">Download</string>
     <string name="intake_cancel_action">Cancel</string>
+    <string name="intake_cancelled">Download cancelled.</string>
+    <!-- PackageInstaller user-action prompts -->
+    <string name="user_action_channel_name">Install confirmation</string>
+    <string name="user_action_channel_desc">Requests that need a tap before the platform continues.</string>
+    <string name="user_action_notification_title">Confirmation required</string>
+    <string name="user_action_notification_desc">Tap to continue installing %1$s.</string>
+    <string name="user_action_notification_desc_unknown">Tap to continue the pending operation.</string>
 </resources>
 

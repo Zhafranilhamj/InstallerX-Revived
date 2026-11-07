@@ -22,15 +22,23 @@ class LocalShareProtocolTest {
     }
 
     @Test
-    fun `pin security uses a hash and never accepts a wrong pin`() {
-        val token = LocalShareProtocol.pinToken("1234")
-        assertTrue(LocalShareProtocol.isAuthorized("1234", token, null))
-        assertTrue(LocalShareProtocol.isAuthorized("1234", null, "1234"))
-        assertFalse(LocalShareProtocol.isAuthorized("1234", null, "9999"))
-        assertFalse(LocalShareProtocol.isAuthorized("1234", "", null))
-        assertTrue(LocalShareProtocol.isAuthorized("", null, null))
+    fun `pin security never accepts a wrong pin`() {
+        assertTrue(LocalShareProtocol.matchesPin("1234", "1234"))
+        assertFalse(LocalShareProtocol.matchesPin("1234", "9999"))
+        assertFalse(LocalShareProtocol.matchesPin("1234", null))
+        assertFalse(LocalShareProtocol.matchesPin("1234", ""))
+        // The session cookie is no longer a PIN-derived value, so it must not authorize on its own.
+        assertFalse(LocalShareProtocol.matchesPin("1234", "1234".padEnd(64, '0')))
+        assertTrue(LocalShareProtocol.matchesPin("", null))
         assertFalse(LocalShareProtocol.isValidPin("12"))
         assertTrue(LocalShareProtocol.isValidPin(""))
+    }
+
+    @Test
+    fun `generated pins are six digits and not identical`() {
+        val pins = (1..200).map { LocalShareProtocol.generatePin() }
+        assertTrue(pins.all { it.length == 6 && it.all { character -> character.isDigit() } })
+        assertTrue(pins.toSet().size > 190, "SecureRandom PINs must not repeat")
     }
 
     @Test

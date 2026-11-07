@@ -113,9 +113,12 @@ class InstalledAppsRepositoryImpl(
                 action = UninstallStatusHolder.ACTION_UNINSTALL_RESULT
                 putExtra(UninstallStatusHolder.EXTRA_PACKAGE_NAME, packageName)
             }
+            // A monotonic counter, not `packageName.hashCode()`: two packages can hash to the same
+            // value, and FLAG_UPDATE_CURRENT would then silently rewrite the other request's extras
+            // so one result was attributed to the wrong package.
             val pending = android.app.PendingIntent.getBroadcast(
                 context,
-                packageName.hashCode() and 0x7fffffff,
+                nextRequestCode(),
                 intent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
             )
@@ -134,7 +137,18 @@ class InstalledAppsRepositoryImpl(
 
     override fun clearLog() = holder.clear()
 
+    private fun nextRequestCode(): Int {
+        val next = requestCode.incrementAndGet()
+        // PendingIntent treats negative request codes as ordinary distinct values, but keep them
+        // positive and wrap well before Int.MAX_VALUE to stay away from overflow behaviour.
+        if (next >= Int.MAX_VALUE - 1) requestCode.set(1)
+        return next
+    }
+
     private companion object {
         const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
+
+        /** Unique PendingIntent request codes for the batch uninstall receiver. */
+        val requestCode = java.util.concurrent.atomic.AtomicInteger(1)
     }
 }

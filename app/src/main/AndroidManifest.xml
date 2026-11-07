@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!--
+        POST_PROMOTED_NOTIFICATIONS: Android 16 (API 36) lets an app request "promoted" status for
+        its ongoing installer notification. Without it the install progress/confirmation notification
+        can be demoted to a silent entry, which breaks the user-action flow for background installs
+        (the notification is the only way to surface Status.PENDING_USER_ACTION).
+    -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -9,6 +15,12 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!--
+        MANAGE_EXTERNAL_STORAGE: required to install/read OBB and APK payloads from arbitrary
+        folders the user picks (XAPK/APKM containers, module zips) and to deploy OBB data before an
+        install. The app degrades gracefully when it is not granted; it is declared so users can
+        enable "All files access" for these flows.
+    -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
@@ -239,8 +251,10 @@
             android:excludeFromRecents="true"
             android:finishOnTaskLaunch="true" />
 
+        <!-- Internal only: started by the app through an explicit, non-exported intent. -->
         <service
             android:name="com.rosan.installer.framework.service.InstallerService"
+            android:exported="false"
             android:foregroundServiceType="specialUse">
 
             <property
@@ -267,8 +281,10 @@
             android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <!-- Internal only: hosts the LAN dashboard and must never be startable by other apps. -->
         <service
             android:name=".framework.service.LocalShareService"
+            android:exported="false"
             android:foregroundServiceType="specialUse">
 
             <property
