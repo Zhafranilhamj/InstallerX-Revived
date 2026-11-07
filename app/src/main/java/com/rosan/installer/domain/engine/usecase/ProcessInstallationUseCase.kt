@@ -542,4 +542,3 @@ internal fun SigningBlockCertificateStatus.isBlockedByUnknownPolicy(allowSigUnkn
     SigningBlockCertificateStatus.NOT_INSTALLED,
     -> false
 }
-
