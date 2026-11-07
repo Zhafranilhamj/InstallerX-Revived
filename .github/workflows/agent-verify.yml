@@ -1,0 +1,159 @@
+name: Agent Verify (temporary)
+
+# TEMPORARY diagnostic workflow: converts Spotless formatting violations and unit-test failures
+# into check-run annotations, which are readable through the API. Delete this file once the
+# underlying issues are fixed on the branch.
+
+on:
+  push:
+    branches:
+      - 'arena/**'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
+          build-scan-terms-of-use-agree: "yes"
+          build-scan-publish: false
+          cache-read-only: true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Spotless check
+        id: spotless
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          ./gradlew spotlessCheck --console=plain --no-configuration-cache > spotless.log 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          tail -n 40 spotless.log || true
+
+      - name: Report spotless violations
+        if: always()
+        run: |
+          if ! grep -qE "FAILED|format violations|violations" spotless.log 2>/dev/null; then
+            echo "spotless log clean or missing"
+            exit 0
+          fi
+          # Apply the formatter and report exactly what it wants to change, as annotations.
+          ./gradlew spotlessApply --console=plain --no-configuration-cache > spotless-apply.log 2>&1 || true
+          git add -A -- . ':!*.log'
+          git diff --cached --unified=0 > fmt.diff || true
+          python3 - <<'PY'
+          import re, os
+          path = 'fmt.diff'
+          if not os.path.exists(path):
+              raise SystemExit(0)
+          cur = None
+          line = 0
+          added = []
+          out = []
+
+          def flush():
+              if cur and added:
+                  msg = 'spotless wants: ' + ' | '.join(added[:40])
+                  msg = msg.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+                  out.append(f"::error file={cur},line={max(line,1)}::{msg}")
+
+          for raw in open(path, encoding='utf-8', errors='replace'):
+              if raw.startswith('+++ b/'):
+                  flush()
+                  cur = raw[6:].strip()
+                  added = []
+              elif raw.startswith('@@'):
+                  m = re.search(r'\+(\d+)', raw)
+                  line = int(m.group(1)) if m else 0
+              elif raw.startswith('+') and not raw.startswith('+++'):
+                  content = raw[1:].rstrip('\n')
+                  added.append(content if content.strip() else '<blank line>')
+          flush()
+          for item in out[:25]:
+              print(item)
+          print(f"::notice::total files with formatting changes: {len(out)}")
+          PY
+
+      - name: Unit tests
+        id: tests
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          ./gradlew testUnstableDebugUnitTest --console=plain --no-configuration-cache > test.log 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          tail -n 40 test.log || true
+
+      - name: Report test failures
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, os, re
+          import xml.etree.ElementTree as ET
+
+          reports = glob.glob('**/build/test-results/**/*.xml', recursive=True)
+          emitted = 0
+          total = 0
+          for path in reports:
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              cls = root.get('name') or ''
+              for case in root.iter('testcase'):
+                  for problem in list(case.findall('failure')) + list(case.findall('error')):
+                      total += 1
+                      if emitted >= 20:
+                          continue
+                      message = (problem.get('message') or '').strip()
+                      body = (problem.text or '')
+                      first = ''
+                      for candidate in body.split('\n'):
+                          if 'Exception' in candidate or 'Error' in candidate or candidate.startswith('expected'):
+                              first = candidate.strip()
+                              break
+                      detail = (message + ' ' + first).strip()[:900]
+                      detail = detail.replace('%', '%25').replace('\r', '').replace('\n', ' ')
+                      name = f"{cls}.{case.get('name')}"
+                      name = re.sub(r'[(),]', '_', name)
+                      print(f"::error title={name}::{detail}")
+                      emitted += 1
+
+          if total == 0:
+              print("::notice::no failing unit tests found in reports")
+          else:
+              print(f"::notice::failing tests: {total}")
+          if not reports:
+              tail = ''
+              try:
+                  tail = open('test.log', encoding='utf-8', errors='replace').read()[-1500:]
+              except Exception:
+                  pass
+              tail = tail.replace('%', '%25').replace('\r', '').replace('\n', ' | ')
+              print(f"::error::no test reports produced. Log tail: {tail}")
+          PY
