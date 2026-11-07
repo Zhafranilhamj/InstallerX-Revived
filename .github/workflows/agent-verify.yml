@@ -1,0 +1,155 @@
+name: Agent Verify (temporary)
+
+# TEMPORARY diagnostics workflow: applies formatting, probes the published apksig artifacts, runs the
+# unit-test gate and commits the outcome (plus log tails) back to the branch, because the Actions log
+# blob storage is not reachable from the authoring environment. Delete once the branch is green.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Gradle task to run'
+        required: false
+        default: 'testUnstableDebugUnitTest'
+        type: string
+
+permissions:
+  contents: write
+  checks: write
+  packages: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - name: Probe published apksig artifacts
+        run: |
+          {
+            echo "## apksig probe"
+            echo '```'
+            for v in 9.4.1 9.5.0 9.6.0 10.0.0; do
+              url="https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/$v/apksig-$v.jar"
+              code=$(curl -sS -o "/tmp/apksig-$v.jar" -w '%{http_code}' "$url" || echo "000")
+              echo "apksig $v -> HTTP $code"
+              if [ "$code" = "200" ]; then
+                unzip -o -q "/tmp/apksig-$v.jar" -d "/tmp/apksig-$v" || true
+                javap -classpath "/tmp/apksig-$v" 'com.android.apksig.ApkVerifier$Result' 2>/dev/null \
+                  | grep -E 'v32SchemeSigner|isVerifiedUsingV32Scheme' | sed 's/^/  /' || echo "  (no V3.2 hybrid API)"
+              fi
+            done
+            echo '```'
+          } > /tmp/apksig-probe.md
+          cat /tmp/apksig-probe.md
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
+          build-scan-terms-of-use-agree: "yes"
+          build-scan-publish: false
+          cache-read-only: true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Apply formatting
+        id: format
+        continue-on-error: true
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew spotlessApply --no-configuration-cache --console=plain > /tmp/spotless.log 2>&1
+
+      - name: Unit tests
+        id: tests
+        continue-on-error: true
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew ${{ github.event.inputs.task || 'testUnstableDebugUnitTest' }} --no-configuration-cache -PAPP_ID="com.rosan.installer.x.revived.test" --console=plain > /tmp/tests.log 2>&1
+
+      - name: Collect test failures as annotations
+        if: always()
+        run: |
+          cat > /tmp/report.py <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for path in glob.glob('app/build/test-results/**/*.xml', recursive=True):
+              try:
+                  tree = ET.parse(path)
+              except Exception:
+                  continue
+              for case in tree.iter('testcase'):
+                  for failure in list(case.iter('failure')) + list(case.iter('error')):
+                      message = (failure.get('message') or failure.text or '').replace('%', '%25').replace('\r', ' ')
+                      message = message.replace('\n', ' | ')[:800]
+                      name = (case.get('classname') or '') + '.' + (case.get('name') or '')
+                      print("::error title=unit-test %s :: %s" % (name, message))
+          PY
+          python3 /tmp/report.py || true
+          grep -hE '^e: file' /tmp/tests.log 2>/dev/null | head -n 40 | while IFS= read -r line; do
+            printf '::error title=compile::%s\n' "$(printf '%s' "$line" | sed 's/%/%25/g')"
+          done || true
+
+      - name: Commit diagnostics and formatting
+        if: always()
+        run: |
+          {
+            echo "# Verification diagnostics"
+            echo
+            echo "Commit: $(git rev-parse HEAD)"
+            echo "Formatting outcome: ${{ steps.format.outcome }}"
+            echo "Tests outcome: ${{ steps.tests.outcome }}"
+            echo
+            cat /tmp/apksig-probe.md 2>/dev/null || true
+            echo
+            echo '## spotless.log (tail)'
+            echo '```'
+            tail -n 60 /tmp/spotless.log 2>/dev/null || echo 'no spotless log'
+            echo '```'
+            echo
+            echo '## tests.log (tail)'
+            echo '```'
+            tail -n 220 /tmp/tests.log 2>/dev/null || echo 'no test log'
+            echo '```'
+            echo
+            echo '## failing test methods'
+            echo '```'
+            grep -rhE '<failure|<error' app/build/test-results 2>/dev/null | head -n 60 || echo 'none'
+            echo '```'
+            echo
+            echo '## lint categories'
+            echo '```'
+            LINT=$(find app/build -name 'lint-results-PreviewRelease.txt' 2>/dev/null | head -n 1)
+            grep -hoE '\[[A-Za-z]+\]$' "$LINT" 2>/dev/null | sort | uniq -c | sort -rn | head -n 25 || echo 'none'
+            echo '```'
+            echo
+            echo '## lint NewApi findings'
+            echo '```'
+            grep -hE 'Error:.*\[NewApi\]' "$LINT" 2>/dev/null | head -n 25 || echo 'none'
+            echo '```'
+          } > agent-diagnostics.md
+          git config user.name "agent-verify"
+          git config user.email "agent-verify@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(ci): spotlessApply + verification diagnostics [skip preview] [skip dev]" || exit 0
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Fail if anything failed
+        if: steps.format.outcome != 'success' || steps.tests.outcome != 'success'
+        run: exit 1
