@@ -2,12 +2,12 @@
 // Copyright (C) 2026 InstallerX Revived contributors
 package com.rosan.installer.data.session.resolver
 
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.concurrent.thread
 
 class SeekableBlockCacheTest {
     private val source = ByteArray(32) { it.toByte() }

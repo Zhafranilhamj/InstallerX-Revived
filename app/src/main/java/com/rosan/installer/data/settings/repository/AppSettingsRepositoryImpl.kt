@@ -22,7 +22,6 @@ import com.rosan.installer.domain.settings.model.preferences.SmartAuthorizerPref
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.settings.model.preferences.theme.PaletteStyle
 import com.rosan.installer.domain.settings.model.preferences.theme.ThemeColorSpec
-import com.rosan.installer.framework.security.SecretCipher
 import com.rosan.installer.domain.settings.model.preferences.theme.ThemeMode
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
 import com.rosan.installer.domain.settings.repository.BooleanSetting
@@ -30,6 +29,7 @@ import com.rosan.installer.domain.settings.repository.IntSetting
 import com.rosan.installer.domain.settings.repository.NamedPackageListSetting
 import com.rosan.installer.domain.settings.repository.SharedUidListSetting
 import com.rosan.installer.domain.settings.repository.StringSetting
+import com.rosan.installer.framework.security.SecretCipher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -196,10 +196,9 @@ class AppSettingsRepositoryImpl(
         appDataStore.putString(stringKey(setting), stored)
     }
 
-    override fun getString(setting: StringSetting, default: String): Flow<String> =
-        appDataStore.getString(stringKey(setting), default).map { value ->
-            if (setting.isSecret) SecretCipher.decrypt(value) ?: default else value
-        }
+    override fun getString(setting: StringSetting, default: String): Flow<String> = appDataStore.getString(stringKey(setting), default).map { value ->
+        if (setting.isSecret) SecretCipher.decrypt(value) ?: default else value
+    }
 
     private val StringSetting.isSecret: Boolean
         get() = this == StringSetting.VirusTotalApiKey

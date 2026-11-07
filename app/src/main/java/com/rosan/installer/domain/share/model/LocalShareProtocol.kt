@@ -81,8 +81,7 @@ object LocalShareProtocol {
         return MessageDigest.isEqual(sha256(configuredPin), sha256(candidate))
     }
 
-    private fun sha256(value: String): ByteArray =
-        MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+    private fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
 
     /** Accepts only RFC1918 / loopback / link-local peers, never a public WAN address. */
     fun isLocalPeer(hostAddress: String): Boolean {

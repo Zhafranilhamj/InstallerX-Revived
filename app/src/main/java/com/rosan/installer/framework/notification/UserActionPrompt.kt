@@ -23,6 +23,7 @@ import timber.log.Timber
  */
 object UserActionPrompt {
     private const val CHANNEL_ID = "user_action_confirmation"
+
     // Resource ids are not compile-time constants (non-final R), so these cannot be `const`.
     private val CHANNEL_NAME_RES = R.string.user_action_channel_name
     private val CHANNEL_DESC_RES = R.string.user_action_channel_desc

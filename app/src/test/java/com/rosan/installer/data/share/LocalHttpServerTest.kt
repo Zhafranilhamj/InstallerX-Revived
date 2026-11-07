@@ -276,8 +276,7 @@ class LocalHttpServerTest {
         .addFormDataPart("file", name, bytes.toRequestBody("application/octet-stream".toMediaType()))
         .build()
 
-    private fun upload(server: LocalHttpServer, name: String, bytes: ByteArray): Pair<Int, String> =
-        upload(server, name, plainMultipart(name, bytes))
+    private fun upload(server: LocalHttpServer, name: String, bytes: ByteArray): Pair<Int, String> = upload(server, name, plainMultipart(name, bytes))
 
     private fun upload(server: LocalHttpServer, name: String, body: RequestBody): Pair<Int, String> {
         val response = OkHttpClient.Builder().followRedirects(false).build().newCall(

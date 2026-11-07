@@ -1,0 +1,39 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Configuration on demand is an incubating feature.
+> Task :build-plugins:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :build-plugins:generateExternalPluginSpecBuilders FROM-CACHE
+> Task :build-plugins:extractPrecompiledScriptPluginPlugins FROM-CACHE
+> Task :build-plugins:generateScriptPluginAdapters FROM-CACHE
+> Task :build-plugins:pluginDescriptors
+> Task :build-plugins:processResources
+> Task :build-plugins:compilePluginsBlocks
+> Task :build-plugins:generatePrecompiledScriptPluginAccessors FROM-CACHE
+> Task :build-plugins:compileKotlin
+> Task :build-plugins:compileJava NO-SOURCE
+> Task :build-plugins:classes
+> Task :build-plugins:jar
+
+> Configure project :app
+WARNING: The option setting 'android.r8.maxWorkers=4' is experimental.
+The current default is '1'.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+No custom signing info. Debug build will use the default debug keystore.
+No custom signing info. Release build will use the default debug keystore.
+
+> Task :spotlessKotlin
+> Task :spotlessKotlinApply
+> Task :spotlessKotlinGradle
+> Task :spotlessKotlinGradleApply
+> Task :spotlessApply
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/format-1794063406612.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/InstallerX-Revived/InstallerX-Revived/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 17s
+13 actionable tasks: 9 executed, 4 from cache

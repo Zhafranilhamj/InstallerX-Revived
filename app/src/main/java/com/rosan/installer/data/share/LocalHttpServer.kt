@@ -30,8 +30,7 @@ internal class LocalShareSessionStore(
     private val maxSessions: Int = MAX_SESSIONS,
 ) {
     private val sessions = object : LinkedHashMap<String, Long>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>): Boolean =
-            size > maxSessions
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>): Boolean = size > maxSessions
     }
 
     /** Issues a fresh 128-bit session token and returns it. */
@@ -103,8 +102,7 @@ class LocalHttpServer(
      * remote peer rotate the key and bypass the limiter, or flood the map with `unknown`.
      */
     private val loginAttempts = object : LinkedHashMap<String, MutableList<Long>>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MutableList<Long>>): Boolean =
-            size > MAX_RATE_LIMIT_KEYS
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MutableList<Long>>): Boolean = size > MAX_RATE_LIMIT_KEYS
     }
 
     fun start() {
@@ -456,11 +454,9 @@ class LocalHttpServer(
         }
     }
 
-    private fun respondHtml(output: OutputStream, code: Int, reason: String, html: String) =
-        respond(output, code, reason, "text/html; charset=utf-8", html.toByteArray(Charsets.UTF_8))
+    private fun respondHtml(output: OutputStream, code: Int, reason: String, html: String) = respond(output, code, reason, "text/html; charset=utf-8", html.toByteArray(Charsets.UTF_8))
 
-    private fun respondJson(output: OutputStream, json: String, code: Int = 200, reason: String = "OK") =
-        respond(output, code, reason, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
+    private fun respondJson(output: OutputStream, json: String, code: Int = 200, reason: String = "OK") = respond(output, code, reason, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
 
     private fun respond(
         output: OutputStream,
