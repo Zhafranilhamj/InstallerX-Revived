@@ -5,8 +5,10 @@ package com.rosan.installer.framework.notification
 import android.Manifest
 import android.app.Activity
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -69,10 +71,14 @@ object UserActionPrompt {
                 .setDescription(context.getString(CHANNEL_DESC_RES))
                 .build(),
         )
+        val forward = explicitTarget(actionIntent, context) ?: run {
+            Timber.w("Refusing to post a confirmation notification for an intent without a system target")
+            return false
+        }
         val pending = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(actionIntent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            forward,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val text = packageName?.let { context.getString(R.string.user_action_notification_desc, it) }
@@ -95,5 +101,28 @@ object UserActionPrompt {
         return runCatching { manager.notify(notificationId, notification) }
             .onFailure { Timber.w(it, "Unable to post the user-action notification") }
             .isSuccess
+    }
+
+    /**
+     * Pins the platform-provided confirmation intent to a single system component.
+     *
+     * `PackageInstaller` hands us the intent for its own confirmation activity, but not every OEM
+     * fills in a component. Wrapping such an implicit intent in a [PendingIntent] would let any app
+     * that registers for the action receive it (CodeQL `android/implicit-pendingintent`), so the
+     * target is resolved here and baked in. A resolver that is not part of the system image is
+     * rejected: the platform's installer UI always is, so this only ever blocks impersonation.
+     *
+     * @return an intent safe to forward, or `null` when no system component handles it.
+     */
+    private fun explicitTarget(actionIntent: Intent, context: Context): Intent? {
+        val forward = Intent(actionIntent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (forward.component != null || forward.`package` != null) return forward
+        val activityInfo = forward.resolveActivity(context.packageManager)?.activityInfo ?: return null
+        val flags = activityInfo.applicationInfo?.flags ?: return null
+        val isSystem = flags and ApplicationInfo.FLAG_SYSTEM != 0 ||
+            flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
+        if (!isSystem) return null
+        forward.component = ComponentName(activityInfo.packageName, activityInfo.name)
+        return forward
     }
 }
