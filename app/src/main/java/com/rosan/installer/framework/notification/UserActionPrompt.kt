@@ -104,13 +104,14 @@ object UserActionPrompt {
     }
 
     /**
-     * Pins the platform-provided confirmation intent to a single system component.
+     * Rebuilds the platform-provided confirmation intent around an explicit target component.
      *
      * `PackageInstaller` hands us the intent for its own confirmation activity, but not every OEM
-     * fills in a component. Wrapping such an implicit intent in a [PendingIntent] would let any app
-     * that registers for the action receive it (CodeQL `android/implicit-pendingintent`), so the
-     * target is resolved here and baked in. A resolver that is not part of the system image is
-     * rejected: the platform's installer UI always is, so this only ever blocks impersonation.
+     * fills in a component. Forwarding such an implicit intent into a [PendingIntent] would let any
+     * app that registers for the action receive it (CodeQL `android/implicit-pendingintent`), so the
+     * intent is rebuilt with the resolved component pinned first and only the payload fields copied.
+     * A resolver that is not part of the system image is rejected: the platform installer UI always
+     * is, so this can only narrow the target, never hand it to a third party.
      *
      * @return an intent safe to forward, or `null` when no system component handles it.
      */
