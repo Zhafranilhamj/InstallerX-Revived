@@ -15,17 +15,30 @@ class ObbDeploymentRepositoryImpl(
     private val safTreeStore: ObbSafTreeStore,
 ) : ObbDeploymentRepository {
     override suspend fun deploy(packageName: String, sourcePaths: List<String>): ObbDeploymentResult = withContext(Dispatchers.IO) {
-        val payloads = extractor.extract(packageName, sourcePaths)
-            .filter { it.packageName == packageName }
+        val payloads = try {
+            extractor.extract(packageName, sourcePaths)
+                .filter { it.packageName == packageName }
+        } catch (e: Exception) {
+            Timber.w(e, "OBB extraction failed for $packageName")
+            emptyList()
+        }
         if (payloads.isEmpty()) return@withContext ObbDeploymentResult(packageName)
 
-        val results = payloads.map { payload ->
-            writer.write(payload).also { outcome ->
-                Timber.i("OBB ${payload.fileName}: tier=${outcome.tier}, success=${outcome.success}, detail=${outcome.detail}")
+        // Ensure cleanup on failure/cancel
+        try {
+            val results = payloads.map { payload ->
+                writer.write(payload).also { outcome ->
+                    Timber.i("OBB ${payload.fileName}: tier=${outcome.tier}, success=${outcome.success}, detail=${outcome.detail}")
+                }
+            }
+            ObbDeploymentResult(packageName, results)
+        } finally {
+            payloads.forEach { runCatching { File(it.stagedPath).delete() } }
+            // Cleanup staging dir parent
+            payloads.firstOrNull()?.stagedPath?.let { path ->
+                runCatching { File(path).parentFile?.delete() }
             }
         }
-        payloads.forEach { runCatching { File(it.stagedPath).delete() } }
-        ObbDeploymentResult(packageName, results)
     }
 
     override fun hasSafTree(): Boolean = safTreeStore.get() != null

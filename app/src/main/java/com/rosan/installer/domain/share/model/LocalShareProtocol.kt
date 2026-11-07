@@ -60,9 +60,13 @@ object LocalShareProtocol {
         return LocalShareEndpoint(baseUrl, pin)
     }
 
-    fun pinToken(pin: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(pin.toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
+    private const val PIN_SALT = "InstallerX-Salt-v1"
+    private const val PIN_ITERATIONS = 1000
+    fun pinToken(pin: String): String {
+        var data = (PIN_SALT + pin).toByteArray(Charsets.UTF_8)
+        repeat(PIN_ITERATIONS) { data = MessageDigest.getInstance("SHA-256").digest(data) }
+        return data.joinToString("") { "%02x".format(it) }
+    }
 
     /** Constant-time comparison of the PIN-derived session token. */
     fun isAuthorized(
@@ -94,7 +98,8 @@ object LocalShareProtocol {
                 (a == 169 && b == 254) ||
                 a == 127
         }
-        return address.startsWith("fe80:", ignoreCase = true) || address.startsWith("fc", ignoreCase = true)
+        val lower = address.lowercase()
+        return lower.startsWith("fe80:") || lower.startsWith("fc") || lower.startsWith("fd")
     }
 
     fun percentEncode(value: String): String = buildString {

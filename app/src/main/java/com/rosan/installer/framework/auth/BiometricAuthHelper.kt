@@ -10,29 +10,44 @@ import com.rosan.installer.framework.activity.BiometricsAuthenticationActivity
 /**
  * Safely initiates biometric authentication (non-throwing version).
  */
-suspend fun Context.safeBiometricAuth(title: String, subTitle: String): Boolean {
-    // Clear the single legacy data point from the conflated channel
-    BiometricAuthBridge.authResultChannel.tryReceive()
+suspend fun Context.safeBiometricAuth(title: String, subTitle: String, sessionId: String = "global", timeoutMs: Long = 60_000): Boolean {
+    val channel = BiometricAuthBridge.channelFor(sessionId)
+    // Drain any stale value
+    channel.tryReceive()
 
     val intent = Intent(this, BiometricsAuthenticationActivity::class.java).apply {
         putExtra("auth_title", title)
         putExtra("auth_subtitle", subTitle)
+        putExtra("auth_session_id", sessionId)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        // Ensure multiple transparent Activities are not launched.
         addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
     }
 
     BiometricAuthBridge.isAuthenticating = true
-    this.startActivity(intent)
-
-    // The coroutine will safely suspend here until the transparent Activity sends the result.
-    return try {
-        // Suspend and wait for the result.
-        BiometricAuthBridge.authResultChannel.receive()
-    } finally {
-        // Ensure the state is reset regardless of success, failure, or coroutine cancellation.
+    try {
+        this.startActivity(intent)
+    } catch (e: Exception) {
         BiometricAuthBridge.isAuthenticating = false
+        BiometricAuthBridge.removeChannel(sessionId)
+        throw e
+    }
+
+    return try {
+        withTimeoutOrNull(timeoutMs) {
+            channel.receive()
+        } ?: false.also { BiometricAuthBridge.removeChannel(sessionId) }
+    } finally {
+        BiometricAuthBridge.isAuthenticating = false
+        BiometricAuthBridge.removeChannel(sessionId)
+    }
+}
+
+private suspend fun <T> withTimeoutOrNull(timeoutMs: Long, block: suspend () -> T): T? {
+    return try {
+        kotlinx.coroutines.withTimeout(timeoutMs) { block() }
+    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+        null
     }
 }
 

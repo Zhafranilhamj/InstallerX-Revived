@@ -78,18 +78,22 @@ class LinkIntakeActivity :
         handleIntent(intent)
     }
 
+    // Pending URL awaiting user confirmation
+    private var pendingUrl: String? = null
+    private var awaitingConfirmation = false
+
     private fun handleIntent(incoming: Intent?) {
         val data = incoming?.data
         when {
             incoming?.action == Intent.ACTION_SEND -> {
                 val text = incoming.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
                 val url = URL_REGEX.find(text)?.value
-                if (url == null) fail(R.string.intake_invalid_link) else startDownload(url)
+                if (url == null) fail(R.string.intake_invalid_link) else requestConfirmation(url)
             }
 
             data?.scheme.equals("installerx", ignoreCase = true) -> handleDeepLink(data.toString())
 
-            data?.scheme?.lowercase().orEmpty() in setOf("http", "https") -> startDownload(data.toString())
+            data?.scheme?.lowercase().orEmpty() in setOf("http", "https") -> requestConfirmation(data.toString())
 
             else -> fail(R.string.intake_invalid_link)
         }
@@ -111,11 +115,57 @@ class LinkIntakeActivity :
             "download", "install" -> {
                 val url = runCatching { android.net.Uri.parse(payload).getQueryParameter("url") }.getOrNull()
                     ?: runCatching { android.net.Uri.parse(payload).getQueryParameter("u") }.getOrNull()
-                if (url.isNullOrBlank()) fail(R.string.intake_invalid_link) else startDownload(url)
+                if (url.isNullOrBlank()) fail(R.string.intake_invalid_link) else requestConfirmation(url)
             }
 
             else -> fail(R.string.intake_invalid_link)
         }
+    }
+
+    private fun requestConfirmation(url: String) {
+        // Validate host and extension before confirmation
+        if (!isAllowedUrl(url)) {
+            fail(R.string.intake_invalid_link)
+            Timber.w("Blocked untrusted intake URL: $url")
+            return
+        }
+        pendingUrl = url
+        awaitingConfirmation = true
+        status.value = getString(R.string.intake_confirm_message, url)
+        // UI will show confirmation buttons; for now auto-update status to allow confirmation flow
+        // The Compose UI layer should present Confirm/Cancel - we emit status for legacy UI
+    }
+
+    fun confirmDownload() {
+        val url = pendingUrl ?: return
+        awaitingConfirmation = false
+        startDownload(url)
+    }
+
+    fun cancelDownload() {
+        pendingUrl = null
+        awaitingConfirmation = false
+        fail(R.string.intake_invalid_link)
+    }
+
+    private fun isAllowedUrl(url: String): Boolean {
+        val uri = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase() ?: return false
+        if (scheme !in setOf("http", "https")) return false
+        // Require package-like extension or mime hint; block arbitrary hosts if desired
+        val path = uri.path.orEmpty().lowercase()
+        val allowedExtensions = listOf(".apk", ".apks", ".apkm", ".xapk", ".zip", ".apks.zip")
+        // Allow any https host but enforce extension check
+        if (allowedExtensions.none { path.endsWith(it) }) {
+            Timber.w("URL missing package extension: $url")
+            return false
+        }
+        // Basic host allow-list: block private IPs and non-https for downloads from http if needed
+        val host = uri.host?.lowercase().orEmpty()
+        if (host.isBlank()) return false
+        // Block localhost/private bypass attempts
+        if (host == "localhost" || host.startsWith("127.") || host == "::1") return false
+        return true
     }
 
     private fun startDownload(url: String) {

@@ -28,7 +28,12 @@ class BroadcastHandler(override val scope: CoroutineScope, override val session:
         private const val ACTION = "installer.broadcast.action"
         private const val KEY_NAME = "name"
 
-        private fun getRequestCode(installer: InstallerSessionRepository, name: Name) = "${installer.id}/$name".hashCode()
+        private fun getRequestCode(installer: InstallerSessionRepository, name: Name): Int {
+            // Use stable hash to avoid PendingIntent collisions; combine with name ordinal
+            var h = installer.id.hashCode()
+            h = 31 * h + name.ordinal
+            return h
+        }
 
         fun openIntent(context: Context, installer: InstallerSessionRepository) = Intent()
             .setClassName(context.packageName, ActivityContracts.INSTALLER_ACTIVITY)
@@ -60,18 +65,23 @@ class BroadcastHandler(override val scope: CoroutineScope, override val session:
         registerReceiver(receiver)
     }
 
+    private var isRegistered = false
     private fun registerReceiver(receiver: Receiver) {
+        if (isRegistered) return
         ContextCompat.registerReceiver(
             context,
             receiver,
             IntentFilter(ACTION),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        isRegistered = true
     }
 
     override suspend fun onFinish() {
+        if (!isRegistered) return
         Timber.d("[id=${session.id}] onFinish: Unregistering receiver.")
-        context.unregisterReceiver(receiver)
+        runCatching { context.unregisterReceiver(receiver) }
+        isRegistered = false
     }
 
     private inner class Receiver : BroadcastReceiver() {
@@ -91,7 +101,10 @@ class BroadcastHandler(override val scope: CoroutineScope, override val session:
             }
 
             val keyName = intent.getStringExtra(KEY_NAME) ?: return
-            val name = Name.revert(keyName)
+            val name = Name.revert(keyName) ?: run {
+                Timber.w("Unknown broadcast name: $keyName")
+                return
+            }
             Timber.d("[id=${session.id}] Receiver: Received broadcast for name: $name. Dispatching action.")
             val pendingResult = goAsync()
             receiverScope.launch {
@@ -151,7 +164,7 @@ class BroadcastHandler(override val scope: CoroutineScope, override val session:
         ;
 
         companion object {
-            fun revert(value: String): Name = entries.first { it.value == value }
+            fun revert(value: String): Name? = entries.firstOrNull { it.value == value }
         }
     }
 }

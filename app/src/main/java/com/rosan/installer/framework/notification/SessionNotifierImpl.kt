@@ -94,8 +94,8 @@ class SessionNotifierImpl(
     private var currentInstallKey: String? = null
     private var currentInstallStartTime: Long = 0L
 
-    // Mi island magic
-    private lateinit var globalAuthorizer: Authorizer
+    // Mi island magic - initialized safely with default
+    private var globalAuthorizer: Authorizer = Authorizer.Shizuku
     private val networkMutex = Mutex()
     private var isXiaomiNetworkBlocked = false
     private val xmsfUid: Int? by lazy {
@@ -133,20 +133,18 @@ class SessionNotifierImpl(
         sessionStartTime = System.currentTimeMillis()
 
         scope.launch {
-            globalAuthorizer = appSettingsRepo.preferencesFlow.first().authorizer
+            val prefs = appSettingsRepo.preferencesFlow.first()
+            globalAuthorizer = prefs.authorizer
 
             val settings = NotificationSettings(
-                showDialog = appSettingsRepo.getBoolean(BooleanSetting.ShowDialogWhenPressingNotification, true).first(),
-                showLiveActivity = appSettingsRepo.getBoolean(BooleanSetting.ShowLiveActivity, false).first(),
-                showMiIsland = appSettingsRepo.getBoolean(BooleanSetting.ShowMiIsland, false).first(),
-                miIslandBypassRestriction = appSettingsRepo.getBoolean(
-                    BooleanSetting.ShowMiIslandBypassRestriction,
-                    false,
-                ).first(),
-                miIslandOuterGlow = appSettingsRepo.getBoolean(BooleanSetting.ShowMiIslandOuterGlow, true).first(),
-                showMiIslandBlockingInterval = appSettingsRepo.getInt(IntSetting.ShowMiIslandBlockingInterval, 100).first(),
-                preferSystemIcon = appSettingsRepo.getBoolean(BooleanSetting.PreferSystemIconForInstall, false).first(),
-                preferDynamicColor = appSettingsRepo.getBoolean(BooleanSetting.LiveActivityDynColorFollowPkgIcon, false).first(),
+                showDialog = prefs.showDialogWhenPressingNotification,
+                showLiveActivity = prefs.showLiveActivity,
+                showMiIsland = prefs.useMiIsland,
+                miIslandBypassRestriction = prefs.useMiIslandBypassRestriction,
+                miIslandOuterGlow = prefs.useMiIslandOuterGlow,
+                showMiIslandBlockingInterval = prefs.useMiIslandBlockingIntervalMs,
+                preferSystemIcon = prefs.preferSystemIcon,
+                preferDynamicColor = prefs.useDynColorFollowPkgIconForLiveActivity,
             )
 
             val isModernEligible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA
@@ -432,7 +430,7 @@ class SessionNotifierImpl(
         cancel()
         scope.cancel() // Cancel the internal observer
         val targetUid = xmsfUid
-        if (::globalAuthorizer.isInitialized && globalAuthorizer == Authorizer.Shizuku && targetUid != null) {
+        if (globalAuthorizer == Authorizer.Shizuku && targetUid != null) {
             withContext(Dispatchers.IO + NonCancellable) {
                 networkMutex.withLock {
                     if (isXiaomiNetworkBlocked) {

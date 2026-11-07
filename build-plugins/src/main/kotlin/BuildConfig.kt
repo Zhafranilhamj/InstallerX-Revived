@@ -13,10 +13,12 @@ object BuildConfig {
 }
 
 // Get git commit count safely, compatible with configuration cache
+// Ensures versionCode never regresses on shallow clones/forks: max(git count, VERSION_CODE)
 fun Project.getGitCommitCount(): Int = try {
-    providers.exec {
+    val gitCount = providers.exec {
         commandLine("git", "rev-list", "--count", "HEAD")
     }.standardOutput.asText.get().trim().toInt()
+    maxOf(gitCount, BuildConfig.VERSION_CODE)
 } catch (_: Exception) {
     BuildConfig.VERSION_CODE
 }

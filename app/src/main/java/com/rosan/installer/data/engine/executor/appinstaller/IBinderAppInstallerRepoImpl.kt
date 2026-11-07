@@ -67,7 +67,7 @@ abstract class IBinderAppInstallerRepoImpl(
         const val INSTALL_FLAGS_TAG = "InstallFlags"
     }
 
-    private val taskScope = CoroutineScope(Dispatchers.IO)
+    // No detached taskScope; post-install tasks now inherit caller's scope
 
     protected abstract suspend fun iBinderWrapper(iBinder: IBinder): IBinder
 
@@ -479,23 +479,22 @@ abstract class IBinderAppInstallerRepoImpl(
 
             val pathsToDelete = if (shouldDelete) entities.sourcePath().toList() else emptyList()
 
-            taskScope.launch {
-                runCatching {
-                    postInstallTaskProvider.executeTasks(
-                        authorizer = config.authorizer,
-                        customizeAuthorizer = config.customizeAuthorizer,
-                        info = PostInstallTaskInfo(
-                            packageName = packageName,
-                            enableDexopt = config.enableManualDexopt,
-                            dexoptMode = config.dexoptMode.value,
-                            forceDexopt = config.forceDexopt,
-                            enableAutoDelete = shouldDelete,
-                            deletePaths = pathsToDelete,
-                        ),
-                    )
-                }.onFailure { e ->
-                    Timber.e(e, "Async post-install tasks failed")
-                }
+            runCatching {
+                postInstallTaskProvider.executeTasks(
+                    authorizer = config.authorizer,
+                    customizeAuthorizer = config.customizeAuthorizer,
+                    info = PostInstallTaskInfo(
+                        packageName = packageName,
+                        enableDexopt = config.enableManualDexopt,
+                        dexoptMode = config.dexoptMode.value,
+                        forceDexopt = config.forceDexopt,
+                        enableAutoDelete = shouldDelete,
+                        deletePaths = pathsToDelete,
+                    ),
+                )
+            }.onFailure { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Timber.e(e, "Async post-install tasks failed")
             }
         }
     }

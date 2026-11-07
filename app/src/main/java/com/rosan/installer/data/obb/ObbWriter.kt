@@ -55,19 +55,35 @@ class ObbWriter(
         if (!directory.isDirectory && !directory.mkdirs()) return "Direct I/O: cannot create ${directory.path}"
         val target = File(directory, payload.fileName)
         val temporary = File(directory, "${payload.fileName}.tmp")
+        val stagedFile = File(payload.stagedPath)
+        val originalExists = target.exists()
+        val originalBackup = if (originalExists) File(directory, "${payload.fileName}.bak") else null
         return try {
-            File(payload.stagedPath).inputStream().use { input ->
+            // Preserve existing OBB until new one verified
+            if (originalExists) runCatching { target.copyTo(originalBackup!!, overwrite = true) }
+            stagedFile.inputStream().use { input ->
                 temporary.outputStream().use { output -> input.copyTo(output) }
             }
+            if (temporary.length() != stagedFile.length()) {
+                temporary.delete()
+                if (originalBackup?.exists() == true) originalBackup.delete()
+                return "Direct I/O: staged size mismatch"
+            }
             if (temporary.renameTo(target) || (target.delete() && temporary.renameTo(target))) {
+                originalBackup?.delete()
                 null
             } else {
                 temporary.delete()
+                // restore backup
+                if (originalBackup?.exists() == true) runCatching { originalBackup.renameTo(target) }
                 "Direct I/O: cannot replace ${target.name}"
             }
         } catch (error: Exception) {
             temporary.delete()
+            if (originalBackup?.exists() == true) runCatching { originalBackup.renameTo(target) }
             "Direct I/O: ${error.message.orEmpty()}"
+        } finally {
+            originalBackup?.delete()
         }
     }
 

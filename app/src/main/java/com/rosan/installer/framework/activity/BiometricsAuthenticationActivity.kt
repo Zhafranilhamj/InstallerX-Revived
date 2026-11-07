@@ -12,6 +12,8 @@ import timber.log.Timber
 
 class BiometricsAuthenticationActivity : FragmentActivity() {
     private var isResultSent = false
+    private var isChangingConfig = false
+    private val sessionId: String by lazy { intent.getStringExtra("auth_session_id") ?: "global" }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,7 +44,10 @@ class BiometricsAuthenticationActivity : FragmentActivity() {
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
                     Timber.e("Biometric auth error ($errorCode): $errString")
-                    sendResultAndFinish(false)
+                    // Don't send false on rotation-triggered destroy; only on real auth error
+                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED || !isChangingConfigurations) {
+                        sendResultAndFinish(false)
+                    }
                 }
             },
         )
@@ -53,13 +58,18 @@ class BiometricsAuthenticationActivity : FragmentActivity() {
     private fun sendResultAndFinish(success: Boolean) {
         if (!isResultSent) {
             isResultSent = true
-            BiometricAuthBridge.authResultChannel.trySend(success)
+            // Prefer per-session channel, fallback to legacy
+            runCatching { BiometricAuthBridge.channelFor(sessionId).trySend(success) }
+            runCatching { BiometricAuthBridge.authResultChannel.trySend(success) }
         }
         finish()
     }
 
     override fun onDestroy() {
+        // Rotation triggers onDestroy with isChangingConfigurations=true; don't send false-negative
+        if (!isChangingConfigurations && !isResultSent) {
+            sendResultAndFinish(false)
+        }
         super.onDestroy()
-        sendResultAndFinish(false)
     }
 }

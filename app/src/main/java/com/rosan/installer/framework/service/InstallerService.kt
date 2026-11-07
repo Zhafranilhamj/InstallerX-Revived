@@ -37,7 +37,7 @@ import timber.log.Timber
 class InstallerService : Service() {
     companion object {
         const val EXTRA_ID = "id"
-        private const val IDLE_TIMEOUT_MS = 1000L
+        private const val IDLE_TIMEOUT_MS = 5000L
         private const val UI_EFFECT_DRAIN_DELAY_MS = 500L
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "installer_background_channel"
@@ -72,10 +72,10 @@ class InstallerService : Service() {
 
         Timber.d("onStartCommand: Action=$actionString, ID=$id")
 
-        // Unconditionally fulfill the Android foreground service contract.
-        // Even if the intent is invalid or the session was canceled,
-        // we MUST call startForeground() to prevent the strict 5-second crash.
-        promoteToForeground()
+        // Only promote to foreground if service will do work; avoid excess foreground for Destroy.
+        if (Action.from(actionString) != Action.Destroy) {
+            promoteToForeground()
+        }
 
         // If intent is null, system restarted the service.
         if (intent == null) {
@@ -124,10 +124,13 @@ class InstallerService : Service() {
 
     override fun onDestroy() {
         Timber.d("InstallerService: onDestroy")
+        idleTimeoutJob?.cancel()
         serviceScope.cancel()
         synchronized(sessionScopes) {
             sessionScopes.values.forEach { it.cancel() }
             sessionScopes.clear()
+            uiEffectJobs.values.forEach { it.cancel() }
+            uiEffectJobs.clear()
         }
         super.onDestroy()
     }

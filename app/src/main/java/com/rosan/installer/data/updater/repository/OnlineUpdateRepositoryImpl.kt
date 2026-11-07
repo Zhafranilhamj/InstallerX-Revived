@@ -177,10 +177,17 @@ class OnlineUpdateRepositoryImpl(
                 response.close()
                 return@withContext null
             }
+            // Success: caller owns response body stream; ensure response closes with stream
             val body = response.body
             val contentLength = body.contentLength()
-
-            Pair(body.byteStream(), contentLength)
+            // Wrap stream to close response when stream closed
+            val stream = body.byteStream()
+            val wrapped = object : InputStream() {
+                override fun read(): Int = stream.read()
+                override fun read(b: ByteArray, off: Int, len: Int): Int = stream.read(b, off, len)
+                override fun close() { runCatching { stream.close() }; runCatching { response.close() } }
+            }
+            Pair(wrapped, contentLength)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

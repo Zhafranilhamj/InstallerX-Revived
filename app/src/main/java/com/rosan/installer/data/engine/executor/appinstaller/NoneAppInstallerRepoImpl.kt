@@ -34,7 +34,6 @@ class NoneAppInstallerRepoImpl(
     private val reflect: ReflectionProvider,
     private val postInstallTaskProvider: PostInstallTaskProvider,
 ) : AppInstallerRepository {
-    private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     override suspend fun resolveInstallerPackageName(config: ConfigModel): String = context.packageName
 
@@ -149,7 +148,7 @@ class NoneAppInstallerRepoImpl(
         false
     }
 
-    private fun doFinishWork(config: ConfigModel, entities: List<InstallEntity>, result: Result<Unit>) {
+    private suspend fun doFinishWork(config: ConfigModel, entities: List<InstallEntity>, result: Result<Unit>) {
         Timber.tag("doFinishWork").d("isSuccess: ${result.isSuccess}")
         if (result.isSuccess) {
             val packageName = entities.firstOrNull()?.packageName ?: return
@@ -157,24 +156,23 @@ class NoneAppInstallerRepoImpl(
             val shouldDelete = config.shouldAutoDeleteSource(entities.firstOrNull()?.sourceType)
             val pathsToDelete = if (shouldDelete) entities.sourcePath().toList() else emptyList()
 
-            // Launch a background coroutine to handle post-install tasks (like deletion).
-            coroutineScope.launch {
-                runCatching {
-                    postInstallTaskProvider.executeTasks(
-                        authorizer = Authorizer.None,
-                        customizeAuthorizer = config.customizeAuthorizer,
-                        info = PostInstallTaskInfo(
-                            packageName = packageName,
-                            enableDexopt = config.enableManualDexopt,
-                            dexoptMode = config.dexoptMode.value,
-                            forceDexopt = config.forceDexopt,
-                            enableAutoDelete = shouldDelete,
-                            deletePaths = pathsToDelete,
-                        ),
-                    )
-                }.onFailure { e ->
-                    Timber.e(e, "Async post-install tasks failed")
-                }
+            // Bind to caller coroutine; cancelled with session - no detached immortal scope
+            runCatching {
+                postInstallTaskProvider.executeTasks(
+                    authorizer = Authorizer.None,
+                    customizeAuthorizer = config.customizeAuthorizer,
+                    info = PostInstallTaskInfo(
+                        packageName = packageName,
+                        enableDexopt = config.enableManualDexopt,
+                        dexoptMode = config.dexoptMode.value,
+                        forceDexopt = config.forceDexopt,
+                        enableAutoDelete = shouldDelete,
+                        deletePaths = pathsToDelete,
+                    ),
+                )
+            }.onFailure { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Timber.e(e, "Async post-install tasks failed")
             }
         }
     }

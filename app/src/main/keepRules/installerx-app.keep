@@ -1,0 +1,33 @@
+# Keep R8-critical enums and reflection targets
+-keep class com.rosan.installer.domain.settings.model.preferences.HttpProfile { *; }
+-keep class com.rosan.installer.domain.settings.model.preferences.HttpProfile$Companion { *; }
+-keep class com.rosan.installer.domain.settings.model.preferences.RootMode { *; }
+-keep class com.rosan.installer.domain.settings.model.preferences.RootMode$Companion { *; }
+-keepclassmembers enum com.rosan.installer.domain.settings.model.preferences.HttpProfile { *; }
+-keepclassmembers enum com.rosan.installer.domain.settings.model.preferences.RootMode { *; }
+-keepclassmembers enum * { public static **[] values(); public static ** valueOf(java.lang.String); }
+
+# app_process string-based class loading
+-keep class com.rosan.installer.app_process.** { *; }
+-keep class com.rosan.installer.framework.privileged.core.execution.** { *; }
+-keep class com.rosan.installer.IPrivilegedService { *; }
+-keep class com.rosan.installer.IAppProcessService { *; }
+-keep class com.rosan.installer.IShizukuUserService { *; }
+
+# Reflection used via ReflectionProvider
+-keep class com.rosan.installer.core.reflection.** { *; }
+-keepattributes *Annotation*,Signature,EnclosingMethod,InnerClasses
+
+# Room entities and DAOs
+-keep class com.rosan.installer.data.settings.local.room.entity.** { *; }
+-keep class androidx.room3.** { *; }
+
+# Serialization
+-keepattributes RuntimeVisibleAnnotations
+-keep class kotlinx.serialization.** { *; }
+-keep class com.rosan.installer.domain.settings.model.backup.** { *; }
+-keep class com.rosan.installer.domain.downloader.model.** { *; }
+
+# Keep @Keep annotated classes explicitly
+-keep @androidx.annotation.Keep class * { *; }
+-keepclasseswithmembers class * { @androidx.annotation.Keep <methods>; @androidx.annotation.Keep <fields>; }

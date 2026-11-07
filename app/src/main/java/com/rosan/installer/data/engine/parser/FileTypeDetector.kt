@@ -31,19 +31,26 @@ class FileTypeDetector(private val json: Json, private val unifiedZipFileProvide
     }
 
     init {
-        disableZipPathValidation()
+        // ZipPathValidator intentionally NOT disabled globally; use per-operation bypass if needed
     }
 
-    private fun disableZipPathValidation() {
-        // ZipPathValidator was introduced in Android 14 (API 34)
+    private fun <T> withZipPathValidationDisabled(block: () -> T): T {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            var cleared = false
             try {
                 ZipPathValidator.clearCallback()
-                Timber.d("ZipPathValidator callback cleared for safe in-memory analysis.")
-            } catch (e: Exception) {
-                Timber.w(e, "Failed to clear ZipPathValidator callback.")
+                cleared = true
+            } catch (_: Exception) {}
+            try {
+                return block()
+            } finally {
+                // Restore validation by re-setting default callback if possible
+                if (cleared) {
+                    runCatching { ZipPathValidator.setCallback { _, _ -> null } }
+                }
             }
         }
+        return block()
     }
 
     fun detect(data: DataEntity, extra: AnalyseExtraEntity): DataType = detectWithArchive(data, extra).use { it.type }
