@@ -57,46 +57,17 @@ jobs:
       - name: Report spotless violations
         if: always()
         run: |
-          if ! grep -qE "FAILED|format violations|violations" spotless.log 2>/dev/null; then
-            echo "spotless log clean or missing"
+          if [ ! -s spotless.log ]; then
+            echo "::notice::no spotless log captured"
             exit 0
           fi
-          # Apply the formatter and report exactly what it wants to change, as annotations.
-          ./gradlew spotlessApply --console=plain --no-configuration-cache > spotless-apply.log 2>&1 || true
-          git add -A -- . ':!*.log'
-          git diff --cached --unified=0 > fmt.diff || true
-          python3 - <<'PY'
-          import re, os
-          path = 'fmt.diff'
-          if not os.path.exists(path):
-              raise SystemExit(0)
-          cur = None
-          line = 0
-          added = []
-          out = []
-
-          def flush():
-              if cur and added:
-                  msg = 'spotless wants: ' + ' | '.join(added[:40])
-                  msg = msg.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
-                  out.append(f"::error file={cur},line={max(line,1)}::{msg}")
-
-          for raw in open(path, encoding='utf-8', errors='replace'):
-              if raw.startswith('+++ b/'):
-                  flush()
-                  cur = raw[6:].strip()
-                  added = []
-              elif raw.startswith('@@'):
-                  m = re.search(r'\+(\d+)', raw)
-                  line = int(m.group(1)) if m else 0
-              elif raw.startswith('+') and not raw.startswith('+++'):
-                  content = raw[1:].rstrip('\n')
-                  added.append(content if content.strip() else '<blank line>')
-          flush()
-          for item in out[:25]:
-              print(item)
-          print(f"::notice::total files with formatting changes: {len(out)}")
-          PY
+          # Annotate the files spotless lists as violations, then dump the failure tail.
+          grep -E '^\s{2,}\S+\.(kt|kts)$' spotless.log | sed -E 's/^\s+//' | sort -u | head -n 20 | while read -r file; do
+            [ -f "$file" ] || continue
+            echo "::error file=${file},line=1::spotless reports a format violation in this file"
+          done
+          TAIL=$(tail -c 1800 spotless.log | tr '\n' '|' | tr '\r' ' ' | sed 's/%/%25/g')
+          echo "::error title=spotless-tail::${TAIL}"
 
       - name: Unit tests
         id: tests
