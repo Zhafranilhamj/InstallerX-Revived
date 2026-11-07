@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Process
 import android.os.SystemClock
 import androidx.annotation.RequiresApi
+import androidx.core.content.pm.PackageInfoCompat
 import com.rosan.installer.domain.history.usecase.RecordOperationHistoryUseCase
 import com.rosan.installer.domain.packageupdate.model.PendingSelfUpdate
 import com.rosan.installer.domain.packageupdate.model.PendingSelfUpdateHistory
@@ -225,7 +226,8 @@ class SelfUpdateRecoveryManager(
             recordOperationHistory(
                 history.toSuccessfulOperationHistory(
                     actualNewVersionName = packageInfo?.versionName ?: history.newVersionName,
-                    actualNewVersionCode = packageInfo?.longVersionCode ?: history.newVersionCode,
+                    actualNewVersionCode = packageInfo?.let { PackageInfoCompat.getLongVersionCode(it) }
+                        ?: history.newVersionCode,
                     installerPackageName = installerPackageName,
                 ),
             )

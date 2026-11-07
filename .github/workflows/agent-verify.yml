@@ -132,6 +132,17 @@ jobs:
             echo '```'
             grep -rhE '<failure|<error' app/build/test-results 2>/dev/null | head -n 60 || echo 'none'
             echo '```'
+            echo
+            echo '## lint categories'
+            echo '```'
+            LINT=$(find app/build -name 'lint-results-PreviewRelease.txt' 2>/dev/null | head -n 1)
+            grep -hoE '\[[A-Za-z]+\]$' "$LINT" 2>/dev/null | sort | uniq -c | sort -rn | head -n 25 || echo 'none'
+            echo '```'
+            echo
+            echo '## lint NewApi findings'
+            echo '```'
+            grep -hE 'Error:.*\[NewApi\]' "$LINT" 2>/dev/null | head -n 25 || echo 'none'
+            echo '```'
           } > agent-diagnostics.md
           git config user.name "agent-verify"
           git config user.email "agent-verify@users.noreply.github.com"
