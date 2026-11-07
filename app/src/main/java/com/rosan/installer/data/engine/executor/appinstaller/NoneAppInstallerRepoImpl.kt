@@ -17,8 +17,8 @@ import com.rosan.installer.domain.engine.model.install.InstallMetadata
 import com.rosan.installer.domain.engine.model.install.InstallPhase
 import com.rosan.installer.domain.engine.model.install.InstallWriteProgress
 import com.rosan.installer.domain.engine.model.install.shouldAutoDeleteSource
-import com.rosan.installer.domain.engine.model.packageinfo.SplitNamePolicy
 import com.rosan.installer.domain.engine.model.install.sourcePath
+import com.rosan.installer.domain.engine.model.packageinfo.SplitNamePolicy
 import com.rosan.installer.domain.engine.repository.AppInstallerRepository
 import com.rosan.installer.domain.privileged.model.PostInstallTaskInfo
 import com.rosan.installer.domain.privileged.provider.PostInstallTaskProvider

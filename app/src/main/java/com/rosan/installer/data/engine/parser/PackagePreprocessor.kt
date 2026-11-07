@@ -132,7 +132,7 @@ class PackagePreprocessor(
             is DataEntity.FileEntity -> "${entityData.path}|${entityData.getSize()}"
             is DataEntity.ZipFileEntity -> "${entityData.name}|${entityData.getSize()}"
             is DataEntity.SeekableZipEntryEntity -> "${entityData.crc}|${entityData.getSize()}"
-            else -> "${packageName}_${versionCode}"
+            else -> "${packageName}_$versionCode"
         }
     }
 

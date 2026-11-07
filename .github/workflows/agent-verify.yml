@@ -1,8 +1,8 @@
 name: Agent Verify (temporary)
 
-# TEMPORARY diagnostics workflow: runs the style and unit-test gates and republishes their output
-# as check-run annotations plus a diagnostics file committed back to the branch, because the Actions
-# log blob storage is not reachable from the authoring environment. Delete once the branch is green.
+# TEMPORARY diagnostics workflow: applies formatting, probes the published apksig artifacts, runs the
+# unit-test gate and commits the outcome (plus log tails) back to the branch, because the Actions log
+# blob storage is not reachable from the authoring environment. Delete once the branch is green.
 
 on:
   workflow_dispatch:
@@ -36,6 +36,25 @@ jobs:
           distribution: 'zulu'
           java-version: '25'
 
+      - name: Probe published apksig artifacts
+        run: |
+          {
+            echo "## apksig probe"
+            echo '```'
+            for v in 9.4.1 9.5.0 9.6.0 10.0.0; do
+              url="https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/$v/apksig-$v.jar"
+              code=$(curl -sS -o "/tmp/apksig-$v.jar" -w '%{http_code}' "$url" || echo "000")
+              echo "apksig $v -> HTTP $code"
+              if [ "$code" = "200" ]; then
+                unzip -o -q "/tmp/apksig-$v.jar" -d "/tmp/apksig-$v" || true
+                javap -classpath "/tmp/apksig-$v" 'com.android.apksig.ApkVerifier$Result' 2>/dev/null \
+                  | grep -E 'v32SchemeSigner|isVerifiedUsingV32Scheme' | sed 's/^/  /' || echo "  (no V3.2 hybrid API)"
+              fi
+            done
+            echo '```'
+          } > apksig-probe.md
+          cat apksig-probe.md
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
@@ -47,14 +66,14 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Spotless check
-        id: spotless
+      - name: Apply formatting
+        id: format
         continue-on-error: true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew spotlessCheck --no-configuration-cache --console=plain > spotless.log 2>&1
+          ./gradlew spotlessApply --no-configuration-cache --console=plain > spotless.log 2>&1
 
       - name: Unit tests
         id: tests
@@ -69,7 +88,7 @@ jobs:
         if: always()
         run: |
           cat > /tmp/report.py <<'PY'
-          import sys, glob, xml.etree.ElementTree as ET
+          import glob, xml.etree.ElementTree as ET
           for path in glob.glob('app/build/test-results/**/*.xml', recursive=True):
               try:
                   tree = ET.parse(path)
@@ -83,28 +102,30 @@ jobs:
                       print("::error title=unit-test %s :: %s" % (name, message))
           PY
           python3 /tmp/report.py || true
-          grep -nE '^(e: |w: )?file:.*\.kts?:[0-9]+:[0-9]+|\.kts?:[0-9]+:[0-9]+ (error|warning)' spotless.log tests.log 2>/dev/null | head -n 40 | while IFS= read -r line; do
+          grep -hE '^e: file' tests.log 2>/dev/null | head -n 40 | while IFS= read -r line; do
             printf '::error title=compile::%s\n' "$(printf '%s' "$line" | sed 's/%/%25/g')"
           done || true
 
-      - name: Commit diagnostics
+      - name: Commit diagnostics and formatting
         if: always()
         run: |
           {
             echo "# Verification diagnostics"
             echo
             echo "Commit: $(git rev-parse HEAD)"
-            echo "Spotless outcome: ${{ steps.spotless.outcome }}"
+            echo "Formatting outcome: ${{ steps.format.outcome }}"
             echo "Tests outcome: ${{ steps.tests.outcome }}"
+            echo
+            cat apksig-probe.md 2>/dev/null || true
             echo
             echo '## spotless.log (tail)'
             echo '```'
-            tail -n 120 spotless.log 2>/dev/null || echo 'no spotless log'
+            tail -n 60 spotless.log 2>/dev/null || echo 'no spotless log'
             echo '```'
             echo
             echo '## tests.log (tail)'
             echo '```'
-            tail -n 200 tests.log 2>/dev/null || echo 'no test log'
+            tail -n 220 tests.log 2>/dev/null || echo 'no test log'
             echo '```'
             echo
             echo '## failing test methods'
@@ -114,10 +135,10 @@ jobs:
           } > agent-diagnostics.md
           git config user.name "agent-verify"
           git config user.email "agent-verify@users.noreply.github.com"
-          git add agent-diagnostics.md
-          git commit -m "chore(ci): verification diagnostics [skip preview] [skip dev]" || exit 0
+          git add -A
+          git commit -m "chore(ci): spotlessApply + verification diagnostics [skip preview] [skip dev]" || exit 0
           git push origin HEAD:${{ github.ref_name }}
 
       - name: Fail if anything failed
-        if: steps.spotless.outcome != 'success' || steps.tests.outcome != 'success'
+        if: steps.format.outcome != 'success' || steps.tests.outcome != 'success'
         run: exit 1

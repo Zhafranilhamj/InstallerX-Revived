@@ -446,7 +446,7 @@ class InstallerActivity :
         // terminal state, release it here; otherwise the singleton manager would keep the
         // repository alive for the rest of the process.
         val currentSession = session
-        if (isFinishing && currentSession != null && currentSession.progress.value.isSessionTerminal()) {
+        if (isFinishing && currentSession != null && latestProgress.isSessionTerminal()) {
             Timber.d("[id=${currentSession.id}] onDestroy: session is terminal and the activity is finishing. Closing.")
             runCatching { currentSession.close() }
                 .onFailure { error -> Timber.w(error, "onDestroy: session close failed") }

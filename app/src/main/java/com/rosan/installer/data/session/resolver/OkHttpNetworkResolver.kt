@@ -20,10 +20,10 @@ import com.rosan.installer.domain.session.exception.ResolveException
 import com.rosan.installer.domain.session.model.ProgressEntity
 import com.rosan.installer.domain.session.model.ResolveErrorType
 import com.rosan.installer.domain.session.repository.NetworkResolver
-import com.rosan.installer.domain.share.model.LocalShareProtocol
 import com.rosan.installer.domain.settings.model.config.NetworkSourceMode
 import com.rosan.installer.domain.settings.model.preferences.HttpProfile
 import com.rosan.installer.domain.settings.repository.AppSettingsRepository
+import com.rosan.installer.domain.share.model.LocalShareProtocol
 import com.rosan.installer.util.isZipMagicNumber
 import java.io.File
 import java.io.FilterInputStream

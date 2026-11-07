@@ -21,7 +21,8 @@ class RoomSchemaExportTest {
         val directory = schemaDirectory()
         val exported = directory.listFiles()
             .orEmpty()
-            .mapNotNull { it.name.removeSuffix(".json").toIntOrNull()?.takeIf { _ -> it.name.endsWith(".json") } }
+            .filter { it.isFile && it.name.endsWith(".json") }
+            .mapNotNull { it.name.removeSuffix(".json").toIntOrNull() }
             .toSet()
 
         assertTrue(exported.isNotEmpty(), "No Room schema JSON files found in ${directory.absolutePath}")

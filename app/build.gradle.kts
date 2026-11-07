@@ -160,8 +160,11 @@ aboutLibraries {
     }
 }
 
-// apksig is consumed from Maven (see the dependency block); this build-tools lookup is kept only
-// as an opt-in fallback for fully offline environments: -PuseLocalApksigJar=true.
+// Signature analysis in `PendingApkSignatureAnalyzer` uses the V3.2 hybrid / PQC signer API
+// (`ApkVerifier.Result.v32SchemeSigner`, `classicalSignerInfo`, `pqcSignerInfo`), which is only
+// published inside build-tools >= 37 `lib/apksigner.jar`; the released `com.android.tools.build:apksig`
+// artifacts do not expose it yet. Build Tools are therefore still required by default, and
+// `-PuseLocalApksigJar=false` opts into the Maven artifact instead (for tooling checks only).
 private val minApksignerBuildTools = "37.0.0"
 
 private fun buildToolsVersionParts(version: String): List<Int> = version
@@ -195,10 +198,9 @@ val apksignerJar = androidComponents.sdkComponents.sdkDirectory.map { sdkDirecto
     selectApksignerJar(sdkDirectory.asFile)
 }
 
-// Standard builds resolve `com.android.tools.build:apksig` from Google Maven. The SDK jar is only
-// wired in when explicitly requested, so a modern build-tools installation is no longer a
-// prerequisite for compiling the app.
-val useLocalApksigJar = (project.findProperty("useLocalApksigJar") as String?)?.toBoolean() == true
+// Default: the SDK `apksigner.jar`, because it is the only source of the V3.2 hybrid signer API.
+// Pass `-PuseLocalApksigJar=false` to compile against `com.android.tools.build:apksig` from Maven.
+val useLocalApksigJar = (project.findProperty("useLocalApksigJar") as String?)?.toBoolean() != false
 
 room3 {
     // Specify the schema directory

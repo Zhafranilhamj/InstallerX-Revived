@@ -6,8 +6,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.rosan.installer.data.session.repository.InstallerSessionRepositoryImpl
-import com.rosan.installer.domain.session.repository.InstallerSessionManager
 import com.rosan.installer.domain.session.model.ProgressEntity
+import com.rosan.installer.domain.session.repository.InstallerSessionManager
 import com.rosan.installer.domain.session.repository.InstallerSessionRepository
 import com.rosan.installer.framework.service.InstallerService
 import java.util.UUID

@@ -42,6 +42,7 @@ class InstallerSessionRepositoryImpl(override val id: String, private val onClos
     override var sourceUris: List<String> by mutableStateOf(emptyList())
     override var referrerUri: String? by mutableStateOf(null)
     override var analysisResults: List<PackageAnalysisResult> by mutableStateOf(emptyList())
+
     // Declared as the concrete type it actually is: a StateFlow (single latest value) rather than a
     // replay-less shared flow. The old signature misled readers into expecting every intermediate
     // progress update to be observed.
