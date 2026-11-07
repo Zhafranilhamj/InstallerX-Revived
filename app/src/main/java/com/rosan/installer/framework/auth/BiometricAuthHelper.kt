@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import com.rosan.installer.domain.engine.exception.AuthenticationFailedException
 import com.rosan.installer.framework.activity.BiometricsAuthenticationActivity
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Safely initiates biometric authentication (non-throwing version).
@@ -40,14 +41,6 @@ suspend fun Context.safeBiometricAuth(title: String, subTitle: String, sessionId
     } finally {
         BiometricAuthBridge.isAuthenticating = false
         BiometricAuthBridge.removeChannel(sessionId)
-    }
-}
-
-private suspend fun <T> withTimeoutOrNull(timeoutMs: Long, block: suspend () -> T): T? {
-    return try {
-        kotlinx.coroutines.withTimeout(timeoutMs) { block() }
-    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-        null
     }
 }
 

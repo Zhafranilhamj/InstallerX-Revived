@@ -315,7 +315,9 @@ class LocalHttpServer(
         return try {
             val originHost = java.net.URI(origin).host ?: return false
             originHost.equals(host.substringBefore(':'), true)
-        } catch (_: Exception) { false }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun sanitizeFileName(name: String?): String? {

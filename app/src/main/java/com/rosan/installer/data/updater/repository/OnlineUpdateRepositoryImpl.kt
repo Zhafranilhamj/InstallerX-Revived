@@ -185,7 +185,10 @@ class OnlineUpdateRepositoryImpl(
             val wrapped = object : InputStream() {
                 override fun read(): Int = stream.read()
                 override fun read(b: ByteArray, off: Int, len: Int): Int = stream.read(b, off, len)
-                override fun close() { runCatching { stream.close() }; runCatching { response.close() } }
+                override fun close() {
+                    runCatching { stream.close() }
+                    runCatching { response.close() }
+                }
             }
             Pair(wrapped, contentLength)
         } catch (e: CancellationException) {
