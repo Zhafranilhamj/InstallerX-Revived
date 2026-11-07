@@ -117,10 +117,10 @@ object UserActionPrompt {
     private fun explicitTarget(actionIntent: Intent, context: Context): Intent? {
         val forward = Intent(actionIntent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (forward.component != null || forward.`package` != null) return forward
-        val activityInfo = forward.resolveActivity(context.packageManager)?.activityInfo ?: return null
-        val flags = activityInfo.applicationInfo?.flags ?: return null
-        val isSystem = flags and ApplicationInfo.FLAG_SYSTEM != 0 ||
-            flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
+        val activityInfo = forward.resolveActivityInfo(context.packageManager, 0) ?: return null
+        val appFlags = activityInfo.applicationInfo?.flags ?: return null
+        val isSystem = appFlags and ApplicationInfo.FLAG_SYSTEM != 0 ||
+            appFlags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
         if (!isSystem) return null
         forward.component = ComponentName(activityInfo.packageName, activityInfo.name)
         return forward
