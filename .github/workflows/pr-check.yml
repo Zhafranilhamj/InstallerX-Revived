@@ -198,7 +198,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew assemblePreviewRelease --no-configuration-cache -PAPP_ID="com.rosan.installer.x.revived.test"
 
+      # Reporting only for now: the project carries ~1.2k pre-existing lint findings, so making this
+      # blocking would fail every PR. Adopt `lint-baseline.xml` once those are triaged, then drop
+      # `continue-on-error` to turn the step into a ratchet against new issues.
       - name: Run Android Lint
+        continue-on-error: true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

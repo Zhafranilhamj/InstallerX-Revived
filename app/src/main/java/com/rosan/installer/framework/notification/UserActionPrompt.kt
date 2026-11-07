@@ -2,13 +2,16 @@
 // Copyright (C) 2026 InstallerX Revived contributors
 package com.rosan.installer.framework.notification
 
+import android.Manifest
 import android.app.Activity
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.rosan.installer.R
 import timber.log.Timber
 
@@ -82,7 +85,15 @@ object UserActionPrompt {
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
-        manager.notify(notificationId, notification)
-        return true
+        // POST_NOTIFICATIONS is a runtime permission on API 33+; without it notify() is silently
+        // dropped (and lint flags the unchecked call). Bail out instead of pretending it was shown.
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        return runCatching { manager.notify(notificationId, notification) }
+            .onFailure { Timber.w(it, "Unable to post the user-action notification") }
+            .isSuccess
     }
 }
