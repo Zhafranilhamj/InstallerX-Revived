@@ -115,14 +115,27 @@ object UserActionPrompt {
      * @return an intent safe to forward, or `null` when no system component handles it.
      */
     private fun explicitTarget(actionIntent: Intent, context: Context): Intent? {
-        val forward = Intent(actionIntent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (forward.component != null || forward.`package` != null) return forward
-        val activityInfo = forward.resolveActivityInfo(context.packageManager, 0) ?: return null
-        val appFlags = activityInfo.applicationInfo?.flags ?: return null
-        val isSystem = appFlags and ApplicationInfo.FLAG_SYSTEM != 0 ||
-            appFlags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
-        if (!isSystem) return null
-        forward.component = ComponentName(activityInfo.packageName, activityInfo.name)
+        val candidate = Intent(actionIntent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val resolvedComponent = candidate.component ?: run {
+            val activityInfo = candidate.resolveActivityInfo(context.packageManager, 0) ?: return null
+            val appFlags = activityInfo.applicationInfo?.flags ?: return null
+            val isSystem = appFlags and ApplicationInfo.FLAG_SYSTEM != 0 ||
+                appFlags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
+            if (!isSystem) return null
+            ComponentName(activityInfo.packageName, activityInfo.name)
+        }
+
+        val forward = Intent().apply {
+            component = resolvedComponent
+            action = candidate.action
+            if (candidate.data != null || candidate.type != null) {
+                setDataAndType(candidate.data, candidate.type)
+            }
+            candidate.categories?.forEach { addCategory(it) }
+            putExtras(candidate)
+            clipData = candidate.clipData
+            addFlags(candidate.flags)
+        }
         return forward
     }
 }
