@@ -40,7 +40,9 @@ class FileTypeDetector(private val json: Json, private val unifiedZipFileProvide
             try {
                 ZipPathValidator.clearCallback()
                 cleared = true
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                Timber.w("Failed to clear ZipPathValidator callback.")
+            }
             try {
                 return block()
             } finally {

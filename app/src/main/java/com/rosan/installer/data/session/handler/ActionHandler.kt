@@ -19,11 +19,10 @@ import com.rosan.installer.domain.engine.exception.AnalyseException
 import com.rosan.installer.domain.engine.exception.AuthenticationFailedException
 import com.rosan.installer.domain.engine.exception.DescriptorAnalysisUnsupportedException
 import com.rosan.installer.domain.engine.exception.InstallException
-
-private object NoErrorSentinel : Throwable("No error", null, false, false)
 import com.rosan.installer.domain.engine.model.AnalyseExtraEntity
 import com.rosan.installer.domain.engine.model.error.AnalyseErrorType
 import com.rosan.installer.domain.engine.model.error.InstallErrorType
+import com.rosan.installer.domain.engine.model.error.NoError
 import com.rosan.installer.domain.engine.model.install.InstallMetadata
 import com.rosan.installer.domain.engine.model.install.InstallPhase
 import com.rosan.installer.domain.engine.model.install.SessionMode
@@ -1009,7 +1008,7 @@ class ActionHandler(override val scope: CoroutineScope, override val session: In
     }
 
     private fun resetState() {
-        session.error = NoErrorSentinel
+        session.error = NoError
         session.config = default
         session.sourceUris = emptyList()
         session.referrerUri = null

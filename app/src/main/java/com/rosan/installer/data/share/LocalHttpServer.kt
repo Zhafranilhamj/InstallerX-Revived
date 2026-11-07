@@ -137,7 +137,6 @@ class LocalHttpServer(
                     respondHtml(output, 401, "Unauthorized", LocalShareDashboard.loginPage(error = true))
                 }
             }
-            }
 
             !authorized -> respondHtml(output, 401, "Unauthorized", LocalShareDashboard.loginPage())
 

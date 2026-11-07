@@ -7,6 +7,7 @@ import android.content.IntentSender
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.rosan.installer.domain.engine.model.error.NoError
 import com.rosan.installer.domain.engine.model.packageinfo.PackageAnalysisResult
 import com.rosan.installer.domain.engine.model.source.DataEntity
 import com.rosan.installer.domain.session.model.ConfirmationDetails
@@ -34,9 +35,8 @@ class InstallerSessionRepositoryImpl(override val id: String, private val onClos
 
     private val isClosed = AtomicBoolean(false)
 
-    private object NoErrorSentinel : Throwable("No error", null, false, false)
     // Properties implementation
-    override var error: Throwable = NoErrorSentinel
+    override var error: Throwable = NoError
     override var config: ConfigModel = ConfigModel.default
     override var data: List<DataEntity> by mutableStateOf(emptyList())
     override var sourceUris: List<String> by mutableStateOf(emptyList())
