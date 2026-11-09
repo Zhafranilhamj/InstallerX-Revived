@@ -1,0 +1,34 @@
+name: Temporary Format Diagnostic
+on:
+  push:
+    branches: ['arena/fc0cd3ad-installerx-revived']
+    paths: ['.github/workflows/temporary-format-diagnostic.yml']
+permissions:
+  contents: read
+  packages: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      - name: Format and report patch
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew spotlessApply --no-configuration-cache > /tmp/format.log 2>&1 || true
+          python3 - <<'PY'
+          import subprocess
+          diff = subprocess.check_output(['git', 'diff']).decode()
+          if not diff:
+              diff = open('/tmp/format.log').read()[-12000:]
+          diff = diff.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::warning title=Format diagnostic::' + diff[:60000])
+          PY
