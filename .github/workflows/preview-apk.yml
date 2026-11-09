@@ -1,13 +1,13 @@
 name: Preview APK
 
-# Builds a ready-to-install Preview APK and exposes it as a downloadable artifact.
+# Builds debug and release-variant Preview APKs as downloadable artifacts.
 #
 # The Preview flavor is a debug-signed build that can be installed alongside the official
 # com.rosan.installer.x.revived release because it uses its own application ID.
 #
 # Usage:
 #   - Actions -> "Preview APK" -> Run workflow (also runs on every push to a non-main branch)
-#   - Download the "preview-apk-<sha>" artifact from the run summary (retained for 90 days)
+#   - Download "preview-apk-<sha>" or "preview-release-apk-<sha>" from the run summary (90 days)
 
 on:
   workflow_dispatch:
@@ -211,6 +211,96 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.meta.outputs.artifact_name }}
+          path: ${{ steps.package_apk.outputs.apk }}
+          if-no-files-found: error
+          retention-days: 90
+          archive: false
+
+  build_preview_release_apk:
+    name: Build Preview Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
+          build-scan-terms-of-use-agree: "yes"
+          build-scan-publish: false
+          cache-read-only: true
+          cache-encryption-key: ${{ secrets.GRADLE_CACHE_ENCRYPTION_KEY }}
+
+      - name: Configure signing and metadata
+        id: meta
+        env:
+          APP_ID_SUFFIX: ${{ github.event.inputs.app_id || '.preview' }}
+          SIGNING_KEY_STORE_BASE64: ${{ secrets.SIGNING_KEY_STORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          SAFE_SUFFIX=$(printf '%s' "$APP_ID_SUFFIX" | tr -cd '.\-A-Za-z0-9')
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "app_id=com.rosan.installer.x.revived${SAFE_SUFFIX}" >> "$GITHUB_OUTPUT"
+          if [ -n "${SIGNING_STORE_PASSWORD:-}" ] && [ -n "${SIGNING_KEY_STORE_BASE64:-}" ] && [ -n "${SIGNING_KEY_PASSWORD:-}" ] && [ -n "${SIGNING_KEY_ALIAS:-}" ]; then
+            mkdir -p keystore
+            echo "$SIGNING_KEY_STORE_BASE64" | base64 --decode > keystore/carlyu.jks
+            echo "storeFile=keystore/carlyu.jks" > keystore.properties
+            echo "keyAlias=${SIGNING_KEY_ALIAS}" >> keystore.properties
+            echo "keyPassword=${SIGNING_KEY_PASSWORD}" >> keystore.properties
+            echo "storePassword=${SIGNING_STORE_PASSWORD}" >> keystore.properties
+            echo "signing=custom signing key" >> "$GITHUB_OUTPUT"
+          else
+            echo "signing=temporary debug key (not suitable for production upgrades)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Preview Release APK
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_ID: ${{ steps.meta.outputs.app_id }}
+        run: ./gradlew assemblePreviewRelease --no-configuration-cache --console=plain -PAPP_ID="$APP_ID"
+
+      - name: Collect Preview Release APK
+        id: package_apk
+        env:
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+          APP_ID: ${{ steps.meta.outputs.app_id }}
+          SIGNING: ${{ steps.meta.outputs.signing }}
+        run: |
+          APK_DIR=$(find app/build/outputs/apk -type d | grep -iE '/preview/release$' | head -n 1)
+          APK_PATH=$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo '::error::Preview Release APK not found.'
+            exit 1
+          fi
+          mkdir -p dist
+          TARGET="dist/InstallerX-Revived-preview-release-${SHORT_SHA}.apk"
+          cp "$APK_PATH" "$TARGET"
+          echo "apk=$TARGET" >> "$GITHUB_OUTPUT"
+          echo '### Preview Release APK' >> "$GITHUB_STEP_SUMMARY"
+          echo "Application ID: \`$APP_ID\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Signing: $SIGNING" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Pre-release build; verify before production use. Download it from Artifacts.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Preview Release APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: preview-release-apk-${{ steps.meta.outputs.short_sha }}
           path: ${{ steps.package_apk.outputs.apk }}
           if-no-files-found: error
           retention-days: 90
