@@ -158,6 +158,30 @@ class VirusTotalScannerProtocolTest {
     }
 
     @Test
+    fun `retrying a large upload requests a fresh single-use URL`() = runTest {
+        val file = tempFile()
+        RandomAccessFile(file, "rw").use { it.setLength(VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1) }
+        val source = DataEntity.FileEntity(file.path)
+        try {
+            val hash = sha256(file)
+            server.enqueue(MockResponse(body = """{"data":"${server.url("/_ah/upload/first")}"}"""))
+            server.enqueue(MockResponse(code = 403, body = "{}"))
+            assertEquals(VirusTotalErrorKind.UPLOAD_REJECTED, assertFailsWith<VirusTotalException> { scanner.uploadAndScan(KEY, source, "file.apk") }.kind)
+            server.enqueue(MockResponse(body = """{"data":"${server.url("/_ah/upload/second")}"}"""))
+            enqueueUploadAccepted()
+            enqueueAnalysisCompleted()
+            enqueueFileReport(hash)
+            assertEquals(VirusTotalVerdict.CLEAN, scanner.uploadAndScan(KEY, source, "file.apk").verdict)
+            assertEquals("/api/v3/files/upload_url", takeRequest().url.encodedPath)
+            assertEquals("/_ah/upload/first", takeRequest().url.encodedPath)
+            assertEquals("/api/v3/files/upload_url", takeRequest().url.encodedPath)
+            assertEquals("/_ah/upload/second", takeRequest().url.encodedPath)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun `single-use upload redirects are not followed with the API key`() = runTest {
         val file = tempFile()
         RandomAccessFile(file, "rw").use { it.setLength(VirusTotalUploadPolicy.DIRECT_MAX_BYTES + 1) }

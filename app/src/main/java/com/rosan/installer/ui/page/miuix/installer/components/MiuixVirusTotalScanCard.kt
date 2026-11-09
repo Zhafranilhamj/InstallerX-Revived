@@ -82,6 +82,7 @@ fun MiuixVirusTotalScanCard(
     state: VirusTotalScanState,
     onScanByHash: () -> Unit,
     onUpload: () -> Unit,
+    onRetryUpload: () -> Unit,
     onVote: (VirusTotalCommunityVerdict) -> Unit,
     onRetryCommunity: () -> Unit,
     modifier: Modifier = Modifier,
@@ -180,6 +181,14 @@ fun MiuixVirusTotalScanCard(
                             if (!alreadyExplained) {
                                 Text(error.kind.messageForDisplay(), style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.error)
                             }
+                        }
+                        if (state.hasRetryableUploadError) {
+                            TextButton(
+                                onClick = onRetryUpload,
+                                enabled = state.canRetryUpload,
+                                text = stringResource(R.string.virustotal_strict_retry_button),
+                                colors = ButtonDefaults.textButtonColorsPrimary(),
+                            )
                         }
                         if (isStrict && state.status == VirusTotalScanStatus.COMPLETED) {
                             Text(

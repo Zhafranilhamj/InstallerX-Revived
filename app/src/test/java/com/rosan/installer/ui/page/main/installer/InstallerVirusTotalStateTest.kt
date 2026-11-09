@@ -32,6 +32,7 @@ import com.rosan.installer.domain.virustotal.usecase.UploadFileForScanUseCase
 import com.rosan.installer.domain.virustotal.usecase.VoteOnVirusTotalFileUseCase
 import com.rosan.installer.domain.virustotal.virusTotalSettings
 import java.lang.reflect.Proxy
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -117,6 +118,26 @@ class InstallerVirusTotalStateTest {
         }
     }
 
+    @Test
+    fun `strict upload retry performs a new scan and honors a malicious result`() = runBlocking {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val harness = Harness(mode = VirusTotalScanMode.STRICT, verdict = VirusTotalVerdict.MALICIOUS, failFirstUpload = true)
+        try {
+            harness.load()
+            awaitUntil { harness.vm.uiState.value.virusTotalScan.canRetryUpload }
+            assertEquals(1, harness.scanner.uploads.get())
+            harness.vm.dispatch(InstallerViewAction.RetryVirusTotalUpload)
+            awaitUntil { harness.vm.uiState.value.virusTotalScan.status == VirusTotalScanStatus.COMPLETED }
+            assertEquals(2, harness.scanner.uploads.get())
+            assertTrue(harness.vm.uiState.value.virusTotalScan.blocksInstallation)
+            harness.vm.dispatch(InstallerViewAction.RetryVirusTotalUpload)
+            assertEquals(2, harness.scanner.uploads.get())
+        } finally {
+            harness.vm.viewModelScope.cancel()
+            Dispatchers.resetMain()
+        }
+    }
+
     private suspend fun awaitUntil(predicate: () -> Boolean) {
         withTimeout(5_000) {
             while (!predicate()) delay(10)
@@ -127,9 +148,10 @@ class InstallerVirusTotalStateTest {
         mode: VirusTotalScanMode = VirusTotalScanMode.NORMAL,
         verdict: VirusTotalVerdict = VirusTotalVerdict.CLEAN,
         voteFailure: Exception? = null,
+        failFirstUpload: Boolean = false,
     ) {
         val preferences = MutableStateFlow(testAppPreferences(mode, KEY, true))
-        val scanner = FakeScanner(verdict, voteFailure)
+        val scanner = FakeScanner(verdict, voteFailure, failFirstUpload)
         val session = InstallerSessionRepositoryImpl("virustotal-state-test") {}
         val data = DataEntity.FileEntity("sample.apk")
         private val settings = virusTotalSettings(preferences)
@@ -176,12 +198,18 @@ class InstallerVirusTotalStateTest {
         }
     }
 
-    private class FakeScanner(private val verdict: VirusTotalVerdict, private val voteFailure: Exception?) : VirusTotalScanner {
+    private class FakeScanner(private val verdict: VirusTotalVerdict, private val voteFailure: Exception?, private val failFirstUpload: Boolean) : VirusTotalScanner {
+        val uploads = AtomicInteger()
         val votes = mutableListOf<VirusTotalCommunityVerdict>()
         private var scores = VirusTotalCommunityScores(1, 0, 1)
         override suspend fun validateApiKey(apiKey: String): Result<Unit> = Result.success(Unit)
         override suspend fun lookupByHash(apiKey: String, sha256: String): VirusTotalReport = report(VirusTotalScanMethod.HASH)
-        override suspend fun uploadAndScan(apiKey: String, data: DataEntity, fileName: String): VirusTotalReport = report(VirusTotalScanMethod.UPLOAD)
+        override suspend fun uploadAndScan(apiKey: String, data: DataEntity, fileName: String): VirusTotalReport {
+            if (uploads.incrementAndGet() == 1 && failFirstUpload) {
+                throw VirusTotalException(VirusTotalErrorKind.NETWORK_ERROR, "offline")
+            }
+            return report(VirusTotalScanMethod.UPLOAD)
+        }
         override suspend fun getCommunityScores(apiKey: String, sha256: String): VirusTotalCommunityScores = scores
         override suspend fun voteOnFile(apiKey: String, sha256: String, verdict: VirusTotalCommunityVerdict) {
             voteFailure?.let { throw it }

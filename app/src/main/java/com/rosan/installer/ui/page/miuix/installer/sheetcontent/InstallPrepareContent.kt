@@ -694,6 +694,7 @@ fun InstallPrepareContent(
                         viewModel.dispatch(InstallerViewAction.VoteOnVirusTotal(sha256, verdict))
                     }
                 },
+                onRetryUpload = { viewModel.dispatch(InstallerViewAction.RetryVirusTotalUpload) },
                 onRetryCommunity = { viewModel.dispatch(InstallerViewAction.RetryVirusTotalCommunity) },
             )
         }

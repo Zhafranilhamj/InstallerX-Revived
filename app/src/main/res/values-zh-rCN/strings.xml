@@ -1040,6 +1040,7 @@
     <string name="virustotal_strict_scan_required">严格模式要求安装前完成扫描。</string>
     <string name="virustotal_strict_scan_complete">扫描完成，现在可以安装。</string>
     <string name="virustotal_strict_scan_in_progress">请等待 VirusTotal 扫描完成后再安装。</string>
+    <string name="virustotal_strict_retry_button">重新上传</string>
     <string name="virustotal_scan_install_with_caution">无法扫描此文件。请谨慎安装。</string>
     <string name="virustotal_result_clean">未检测到威胁</string>
     <string name="virustotal_result_suspicious">存在可疑检测</string>

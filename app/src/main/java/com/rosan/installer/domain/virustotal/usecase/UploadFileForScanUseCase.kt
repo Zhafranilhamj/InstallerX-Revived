@@ -58,7 +58,7 @@ class UploadFileForScanUseCase(
         } catch (error: Exception) {
             Timber.e(error, "Unexpected VirusTotal upload failure")
             VirusTotalScanOutcome.Failure(
-                VirusTotalScanError(VirusTotalErrorKind.NETWORK_ERROR, error.message ?: "Could not reach VirusTotal."),
+                VirusTotalScanError(VirusTotalErrorKind.UNKNOWN, "The VirusTotal scan could not be completed."),
             )
         }
     }

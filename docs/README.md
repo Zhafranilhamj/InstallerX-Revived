@@ -67,7 +67,7 @@ Network settings include an optional VirusTotal integration. Paste a 64-characte
 
 - **Off:** no VirusTotal requests are made.
 - **Normal:** the install confirmation screen starts a **SHA-256 hash lookup** automatically, without uploading any file. **Scan with VirusTotal** repeats the lookup and **Upload files for scanning** remains available for a full manual scan. A report never blocks installation, and the lookup is skipped while network access is off or no valid API key is stored.
-- **Strict:** the file is uploaded automatically and installation is blocked until the scan finishes. If the file is larger than 650 MB or the network request fails, the app shows an error and allows installation with a warning.
+- **Strict:** the file is uploaded automatically and installation is blocked until the scan finishes. If the file is larger than 650 MB or the network request fails, the app shows an error and allows installation with a warning. After a network failure, **Retry upload** starts a new upload attempt; it does not resume an interrupted upload and may send the file again.
 
 Uploads up to and including 32 MB use the standard `/files` endpoint. Larger files, up to and including 650 MB, first request a single-use upload URL from `GET /files/upload_url`; the file is then streamed to that validated VirusTotal URL with the API key, and upload redirects are not followed. Files above 650 MB or with an unknown size are rejected before upload. Queued analyses keep polling while the scan is active instead of failing after a fixed two-minute window; closing the installer session cancels the scan.
 

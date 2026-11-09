@@ -69,6 +69,7 @@ fun VirusTotalScanCard(
     state: VirusTotalScanState,
     onScanByHash: () -> Unit,
     onUpload: () -> Unit,
+    onRetryUpload: () -> Unit,
     onVote: (VirusTotalCommunityVerdict) -> Unit,
     onRetryCommunity: () -> Unit,
     modifier: Modifier = Modifier,
@@ -164,6 +165,11 @@ fun VirusTotalScanCard(
                                 (error.kind == VirusTotalErrorKind.NETWORK_ERROR && !state.networkEnabled)
                             if (!alreadyExplained) {
                                 Text(error.kind.messageForDisplay(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        if (state.hasRetryableUploadError) {
+                            TextButton(onClick = onRetryUpload, enabled = state.canRetryUpload) {
+                                Text(stringResource(R.string.virustotal_strict_retry_button))
                             }
                         }
                         if (isStrict && state.status == VirusTotalScanStatus.COMPLETED) {

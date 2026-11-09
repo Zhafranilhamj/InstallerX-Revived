@@ -1060,6 +1060,7 @@
     <string name="virustotal_strict_scan_required">Strict mode requires a scan before installation.</string>
     <string name="virustotal_strict_scan_complete">Scan complete. You can install now.</string>
     <string name="virustotal_strict_scan_in_progress">Wait for the VirusTotal scan to finish before installing.</string>
+    <string name="virustotal_strict_retry_button">Retry upload</string>
     <string name="virustotal_scan_install_with_caution">Couldn\'t scan this file. Install with caution.</string>
     <string name="virustotal_result_clean">No threats detected</string>
     <string name="virustotal_result_suspicious">Suspicious detections</string>

@@ -5,6 +5,7 @@ package com.rosan.installer.ui.page.main.installer
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.virustotal.model.VirusTotalApiKeyFormat
 import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityVerdict
+import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
@@ -77,6 +78,15 @@ data class VirusTotalScanState(
      */
     val blocksInstallation: Boolean
         get() = (mode == VirusTotalScanMode.STRICT && isScanning) || isBlockedByMalware
+
+    /** Only failed Strict uploads with transient network errors offer an explicit retry. */
+    val hasRetryableUploadError: Boolean
+        get() = isStrict && status == VirusTotalScanStatus.FAILED &&
+            method == VirusTotalScanMethod.UPLOAD &&
+            (error?.kind == VirusTotalErrorKind.NETWORK_ERROR || error?.kind == VirusTotalErrorKind.TIMEOUT)
+
+    val canRetryUpload: Boolean
+        get() = hasRetryableUploadError && networkEnabled && hasUsableApiKey && packageName != null
 
     val canVote: Boolean
         get() = mode != VirusTotalScanMode.OFF && hasUsableApiKey && networkEnabled &&

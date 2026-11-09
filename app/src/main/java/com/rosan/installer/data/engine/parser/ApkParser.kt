@@ -16,6 +16,7 @@ import com.rosan.installer.core.device.model.Manufacturer
 import com.rosan.installer.core.env.DeviceConfig
 import com.rosan.installer.core.reflection.ReflectionProvider
 import com.rosan.installer.core.reflection.invoke
+import com.rosan.installer.core.resParser.VERSION_CODE_MAJOR_ATTR_ID
 import com.rosan.installer.core.resParser.parser.AxmlTreeParser
 import com.rosan.installer.data.engine.signature.PendingApkSignatureAnalyzer
 import com.rosan.installer.domain.engine.exception.AnalyseException
@@ -430,11 +431,10 @@ class ApkParser(
                                 splitName = manifestParser.getAttributeValue(null, "split")
                                 val versionCodeMajor = manifestParser.getAndroidAttributeIntValue(
                                     "versionCodeMajor",
-                                    // TODO Increase minSDK to 28 to get rid of this magic number
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                                         android.R.attr.versionCodeMajor
                                     } else {
-                                        0x01010576
+                                        VERSION_CODE_MAJOR_ATTR_ID
                                     },
                                     0,
                                 ).toLong()

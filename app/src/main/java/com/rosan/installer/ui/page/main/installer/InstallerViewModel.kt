@@ -302,6 +302,8 @@ class InstallerViewModel(
 
             is InstallerViewAction.VoteOnVirusTotal -> submitVote(action.sha256, action.verdict)
 
+            is InstallerViewAction.RetryVirusTotalUpload -> retryVirusTotalUpload()
+
             is InstallerViewAction.RetryVirusTotalCommunity -> retryCommunity()
 
             is InstallerViewAction.ShareApp -> shareApp(action.appEntity)
@@ -983,6 +985,16 @@ class InstallerViewModel(
             method = method,
             mandatory = mandatory,
         )
+    }
+
+    private fun retryVirusTotalUpload() {
+        val scan = uiState.value.virusTotalScan
+        val packageName = _localState.value.currentPackageName ?: return
+        val localScan = _localState.value.virusTotalScan
+        if (!scan.canRetryUpload || scan.packageName != packageName ||
+            localScan.status != VirusTotalScanStatus.FAILED || localScan.packageName != packageName
+        ) return
+        startScanForPackage(packageName, VirusTotalScanMethod.UPLOAD, mandatory = true)
     }
 
     private fun resetVirusTotalScan() {

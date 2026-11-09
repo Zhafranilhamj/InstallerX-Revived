@@ -136,5 +136,7 @@ sealed interface InstallerViewAction {
     /** Posts a real community vote for the currently displayed report, never an older file. */
     data class VoteOnVirusTotal(val sha256: String, val verdict: VirusTotalCommunityVerdict) : InstallerViewAction
 
+    data object RetryVirusTotalUpload : InstallerViewAction
+
     data object RetryVirusTotalCommunity : InstallerViewAction
 }

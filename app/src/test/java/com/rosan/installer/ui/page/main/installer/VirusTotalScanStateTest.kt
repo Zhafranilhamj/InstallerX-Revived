@@ -4,6 +4,8 @@ package com.rosan.installer.ui.page.main.installer
 
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityScores
+import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.domain.virustotal.model.VirusTotalVerdict
@@ -70,4 +72,27 @@ class VirusTotalScanStateTest {
         assertFalse(completed.blocksInstallation)
         assertTrue(completed.copy(status = VirusTotalScanStatus.SCANNING).blocksInstallation)
     }
+
+    @Test
+    fun `retry is offered only for transient strict upload failures`() {
+        val failed = state(mode = VirusTotalScanMode.STRICT).copy(
+            status = VirusTotalScanStatus.FAILED,
+            method = VirusTotalScanMethod.UPLOAD,
+            packageName = "example.app",
+            report = null,
+            error = VirusTotalScanError(VirusTotalErrorKind.NETWORK_ERROR, "offline"),
+        )
+        assertTrue(failed.hasRetryableUploadError)
+        assertTrue(failed.canRetryUpload)
+        assertTrue(failed.copy(error = VirusTotalScanError(VirusTotalErrorKind.TIMEOUT, "timeout")).canRetryUpload)
+        assertFalse(failed.copy(networkEnabled = false).canRetryUpload)
+        assertFalse(failed.copy(apiKey = "invalid").canRetryUpload)
+        assertFalse(failed.copy(packageName = null).canRetryUpload)
+        assertFalse(failed.copy(mode = VirusTotalScanMode.NORMAL).hasRetryableUploadError)
+        assertFalse(failed.copy(method = VirusTotalScanMethod.HASH).hasRetryableUploadError)
+        assertFalse(failed.copy(status = VirusTotalScanStatus.SCANNING).hasRetryableUploadError)
+        assertFalse(failed.copy(error = VirusTotalScanError(VirusTotalErrorKind.FILE_TOO_LARGE, "large")).hasRetryableUploadError)
+        assertFalse(failed.blocksInstallation) // The existing caution fallback remains available.
+    }
+
 }
