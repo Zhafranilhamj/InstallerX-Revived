@@ -5,8 +5,8 @@ package com.rosan.installer.ui.page.main.installer
 import com.rosan.installer.domain.settings.model.preferences.VirusTotalScanMode
 import com.rosan.installer.domain.virustotal.model.VirusTotalCommunityScores
 import com.rosan.installer.domain.virustotal.model.VirusTotalErrorKind
-import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalReport
+import com.rosan.installer.domain.virustotal.model.VirusTotalScanError
 import com.rosan.installer.domain.virustotal.model.VirusTotalScanMethod
 import com.rosan.installer.domain.virustotal.model.VirusTotalVerdict
 import kotlin.test.Test
@@ -94,5 +94,4 @@ class VirusTotalScanStateTest {
         assertFalse(failed.copy(error = VirusTotalScanError(VirusTotalErrorKind.FILE_TOO_LARGE, "large")).hasRetryableUploadError)
         assertFalse(failed.blocksInstallation) // The existing caution fallback remains available.
     }
-
 }

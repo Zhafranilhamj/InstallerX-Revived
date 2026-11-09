@@ -264,8 +264,10 @@ jobs:
             echo "keyPassword=${SIGNING_KEY_PASSWORD}" >> keystore.properties
             echo "storePassword=${SIGNING_STORE_PASSWORD}" >> keystore.properties
             echo "signing=custom signing key" >> "$GITHUB_OUTPUT"
+            echo "signing_slug=custom-signed" >> "$GITHUB_OUTPUT"
           else
             echo "signing=temporary debug key (not suitable for production upgrades)" >> "$GITHUB_OUTPUT"
+            echo "signing_slug=debug-signed" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Preview Release APK
@@ -281,6 +283,7 @@ jobs:
           SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
           APP_ID: ${{ steps.meta.outputs.app_id }}
           SIGNING: ${{ steps.meta.outputs.signing }}
+          SIGNING_SLUG: ${{ steps.meta.outputs.signing_slug }}
         run: |
           APK_DIR=$(find app/build/outputs/apk -type d | grep -iE '/preview/release$' | head -n 1)
           APK_PATH=$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | head -n 1)
@@ -289,7 +292,7 @@ jobs:
             exit 1
           fi
           mkdir -p dist
-          TARGET="dist/InstallerX-Revived-preview-release-${SHORT_SHA}.apk"
+          TARGET="dist/InstallerX-Revived-preview-release-${SHORT_SHA}-${SIGNING_SLUG}.apk"
           cp "$APK_PATH" "$TARGET"
           echo "apk=$TARGET" >> "$GITHUB_OUTPUT"
           echo '### Preview Release APK' >> "$GITHUB_STEP_SUMMARY"

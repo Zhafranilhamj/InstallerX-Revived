@@ -993,7 +993,9 @@ class InstallerViewModel(
         val localScan = _localState.value.virusTotalScan
         if (!scan.canRetryUpload || scan.packageName != packageName ||
             localScan.status != VirusTotalScanStatus.FAILED || localScan.packageName != packageName
-        ) return
+        ) {
+            return
+        }
         startScanForPackage(packageName, VirusTotalScanMethod.UPLOAD, mandatory = true)
     }
 
